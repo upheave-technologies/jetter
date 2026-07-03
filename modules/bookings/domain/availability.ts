@@ -494,3 +494,67 @@ export function reconcile(
 
   return { changes, unresolvable };
 }
+
+// ---------------------------------------------------------------------------
+// Proposal feasibility check (DEC-P6 concurrency guard)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when every change in `proposal` can still be applied to the
+ * given `currentRecords` without exceeding FLEET_SIZE.
+ *
+ * Why: between `proposeReconciliation` and `applyReconciliation` a new booking
+ * may have landed, making the computed shifts infeasible. This pure function
+ * lets the apply use case re-validate the proposal against a fresh snapshot
+ * (read inside the advisory-lock transaction) before writing anything —
+ * preventing silent overbooking (DEC-P9 / architecture.md §3).
+ *
+ * Algorithm: build the post-apply view of the timeline by substituting each
+ * changed booking's window with the proposed [suggestedStart, suggestedStart +
+ * durationMin), then verify that every proposed window fits in that post-apply
+ * view. Uses the existing `fits()` and `peakCommitment()` primitives — no
+ * duplicated capacity math (DEC-A).
+ *
+ * Cancelled bookings in `currentRecords` are excluded from commitment
+ * automatically by `fits()` / `peakCommitment()`.
+ *
+ * Pure: no I/O, no Date.now(), no FLEET_SIZE read inside. `fleet` is passed in.
+ */
+export function proposalFeasible(
+  currentRecords: Booking[],
+  proposal: ReconciliationProposal,
+  fleet: number,
+): boolean {
+  if (proposal.changes.length === 0) return true;
+
+  // Build the post-apply view: replace each changed booking's window with the
+  // proposed window. Bookings not in the proposal are unchanged.
+  const changedIds = new Set(proposal.changes.map((c) => c.bookingId));
+  const postApply: Booking[] = currentRecords.filter((b) => !changedIds.has(b.id));
+
+  for (const change of proposal.changes) {
+    const original = currentRecords.find((b) => b.id === change.bookingId);
+    if (original === undefined || original.status === 'cancelled') {
+      // Booking gone / cancelled since propose — skip it (apply will also skip)
+      continue;
+    }
+    const newEnd = new Date(change.suggestedStart.getTime() + original.durationMin * 60_000);
+    postApply.push({ ...original, startTime: change.suggestedStart, endTime: newEnd });
+  }
+
+  // Verify that every proposed window fits in the post-apply view, excluding
+  // the booking being tested (it is already reflected in postApply at its new
+  // position, so we must exclude it to avoid double-counting its own scooters).
+  for (const change of proposal.changes) {
+    const original = currentRecords.find((b) => b.id === change.bookingId);
+    if (original === undefined || original.status === 'cancelled') continue;
+
+    const newEnd = new Date(change.suggestedStart.getTime() + original.durationMin * 60_000);
+    const others = postApply.filter((b) => b.id !== change.bookingId);
+    if (!fits(others, original.quantity, change.suggestedStart, newEnd, fleet)) {
+      return false;
+    }
+  }
+
+  return true;
+}

@@ -78,6 +78,8 @@ function mapError(code: string): string {
       return 'Neispravan unos podataka';
     case 'SERVICE_ERROR':
       return 'Greška servisa — pokušajte ponovo';
+    case 'RECONCILIATION_STALE':
+      return 'Prijedlog više nije izvediv — predložite ponovo';
     default:
       return 'Neočekivana greška';
   }

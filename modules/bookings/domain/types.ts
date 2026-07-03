@@ -231,6 +231,8 @@ export type DayBoard = {
  * PAST_START: cannot create/edit a reservation with startTime in the past.
  * IMMUTABLE_PAST: cannot modify a past-or-started reservation.
  * CAPACITY_EXCEEDED: requested booking doesn't fit current availability.
+ * RECONCILIATION_STALE: a booking was committed between propose and apply,
+ *   making the proposal no longer feasible. The operator must re-propose.
  */
 export type BookingError = {
   code:
@@ -239,6 +241,7 @@ export type BookingError = {
     | 'CAPACITY_EXCEEDED'
     | 'PAST_START'
     | 'IMMUTABLE_PAST'
+    | 'RECONCILIATION_STALE'
     | 'SERVICE_ERROR';
   message: string;
   details?: unknown;
