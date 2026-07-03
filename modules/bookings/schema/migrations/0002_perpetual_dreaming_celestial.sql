@@ -1,5 +1,13 @@
-CREATE TYPE "public"."audit_action" AS ENUM('create', 'edit', 'cancel', 'apply', 'login_success', 'login_failure');--> statement-breakpoint
-CREATE TYPE "public"."audit_entity_type" AS ENUM('reservation', 'maintenance', 'reconciliation', 'auth', 'system');--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."audit_action" AS ENUM('create', 'edit', 'cancel', 'apply', 'login_success', 'login_failure');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."audit_entity_type" AS ENUM('reservation', 'maintenance', 'reconciliation', 'auth', 'system');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "audit_events" (
 	"id" text PRIMARY KEY NOT NULL,
 	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL,

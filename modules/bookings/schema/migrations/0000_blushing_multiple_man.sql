@@ -1,5 +1,13 @@
-CREATE TYPE "public"."booking_kind" AS ENUM('reservation', 'maintenance');--> statement-breakpoint
-CREATE TYPE "public"."booking_status" AS ENUM('reserved', 'cancelled');--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."booking_kind" AS ENUM('reservation', 'maintenance');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."booking_status" AS ENUM('reserved', 'cancelled');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "bookings" (
 	"id" text PRIMARY KEY NOT NULL,
 	"quantity" integer NOT NULL,
