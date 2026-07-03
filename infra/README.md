@@ -192,13 +192,27 @@ jet has **two** independent drizzle-kit migration sets — `bookings`
 must be applied on every deploy. They are wrapped in one fail-closed runner,
 `scripts/migrate-deploy.mjs`, exposed as `pnpm db:migrate:deploy`:
 
-- **CI migrate job (this is what runs automatically).**
-  `.github/workflows/deploy.yml` runs `pnpm db:migrate:deploy` as a gating step
-  on every push to `main`, BEFORE the Vercel production deploy. If either set
-  fails, the job aborts and the app is never promoted onto a half-migrated
-  database. The workflow supplies the Neon **direct** (non-pooled) MAIN url via
-  the `NEON_DIRECT_DATABASE_URL` repo secret. Same both-sets step runs against
-  each PR's Neon branch in the preview job.
+> **⚠️ Deploys are done by Vercel's NATIVE Git integration, NOT GitHub Actions.**
+> The GitHub Actions workflow that used to run migrations-on-deploy is **DISABLED**
+> — it now lives at `.github/workflows/deploy.yml.disabled` (kept as a backup /
+> reference; the `.disabled` extension makes it dormant). Vercel builds and
+> deploys the app directly on push/PR, but **does NOT run drizzle migrations by
+> default**. Until migrations are wired into the Vercel build (see the option
+> below), applying migrations on deploy is a **manual / not-yet-automated** step.
+
+- **~~CI migrate job (this is what runs automatically).~~ DISABLED.**
+  `.github/workflows/deploy.yml.disabled` (formerly `deploy.yml`) ran
+  `pnpm db:migrate:deploy` as a gating step on every push to `main`, BEFORE the
+  Vercel production deploy — if either set failed, the app was never promoted
+  onto a half-migrated database. That automation is **no longer active**. To
+  preserve migrations-on-deploy under Vercel-native deploys, add a `vercel-build`
+  npm script (or a `buildCommand` in `vercel.json`) that runs
+  `pnpm db:migrate:deploy` against the Neon **DIRECT** url before/as part of the
+  build; a failed migration then fails the build (fail-closed, same contract).
+  Trade-off: the build — and thus the migrate step — runs on **every** deploy
+  including preview branches, so each preview needs its own branch DB url in its
+  Vercel build env. Re-enabling the old workflow instead: rename it back to
+  `deploy.yml` (needs `workflow` push scope).
 
 - **One-off from your machine** (emergency / manual deploy):
   ```bash
@@ -218,7 +232,10 @@ a deploy with no new migration files is a no-op for both sets.
 Neon's copy-on-write branches make per-PR preview databases cheap: a CI workflow
 creates a `pr/<n>` branch off `main` on PR open, runs migrations against it,
 points the Vercel preview deploy's `DATABASE_URL` at the branch, and deletes the
-branch on PR close. You wire and run that workflow — see `/infra-cloud-triage`
+branch on PR close. **Note:** the preview-branch + preview-migrate automation
+also lived in the now-**disabled** `deploy.yml.disabled` workflow, so it is not
+running either — with Vercel-native deploys, preview branch/migration wiring is
+currently manual (or would need to be re-enabled). See `/infra-cloud-triage`
 for the full Vercel + Neon triage and branch-DB walkthrough.
 
 For deeper cloud triage (deployment status, function logs, env mismatches,

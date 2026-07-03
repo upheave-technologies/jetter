@@ -1,4 +1,32 @@
 # =============================================================================
+# ⛔ DISABLED — kept for posterity / backup reference only. DOES NOT RUN.
+# =============================================================================
+# This workflow is intentionally dormant. GitHub Actions only picks up files
+# ending in `.yml` / `.yaml` inside `.github/workflows/`; the `.disabled`
+# extension makes this file invisible to the Actions runner while keeping it
+# colocated with the workflows and readable in the repo.
+#
+# WHY: deploys for jet are handled by Vercel's NATIVE Git integration (Vercel
+# builds + deploys the Next.js app directly on every push/PR). This GitHub
+# Actions pipeline is retained only as a reference implementation / backup.
+#
+# ⚠️ CONSEQUENCE — MIGRATIONS NO LONGER RUN ON DEPLOY. The whole point of this
+# workflow was applying BOTH drizzle migration sets (bookings + audit),
+# fail-closed, before promoting the app. Vercel's native Git integration builds
+# and deploys the app but does NOT run drizzle migrations by default. Unless
+# migrations are wired into the Vercel build another way (e.g. a `vercel-build`
+# npm script running `pnpm db:migrate:deploy` against the Neon DIRECT url), the
+# database will drift from the deployed code. See infra/README.md §3 for the
+# options and the current status.
+#
+# TO RE-ENABLE: rename this file back to `deploy.yml` (e.g.
+# `git mv .github/workflows/deploy.yml.disabled .github/workflows/deploy.yml`),
+# and ensure the push carries `workflow` scope — the credentials pushing the
+# change must be allowed to modify files under `.github/workflows/` (a fine-
+# grained PAT needs the `workflow` scope; or push over SSH with a deploy key).
+# =============================================================================
+#
+# =============================================================================
 # .github/workflows/deploy.yml — jet production + preview deploy
 # =============================================================================
 # jet deploys to Vercel (the Next.js app) + Neon (serverless Postgres). This is
