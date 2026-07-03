@@ -1,0 +1,219 @@
+# =============================================================================
+# .github/workflows/deploy.yml — jet production + preview deploy
+# =============================================================================
+# jet deploys to Vercel (the Next.js app) + Neon (serverless Postgres). This is
+# the CODE/DEPLOY pipeline (infra-commandments §7): it builds, migrates, and
+# deploys code. It NEVER handles application secrets beyond the DB connection
+# string the app already needs, and it never provisions the host (there is no
+# VPS / Ansible for jet — deploy_target: cloud in infra/_kit/manifest.yaml).
+#
+# WHAT THIS FILE ADDS OVER THE KIT'S preview.yml TEMPLATE
+# -------------------------------------------------------
+# The kit template runs ONE migration set (`drizzle-kit migrate`, default
+# config). jet has TWO independent schema modules — bookings and audit — each
+# with its own drizzle-kit journal. BOTH must run on every deploy, fail-closed,
+# BEFORE the app goes live. That is centralised in scripts/migrate-deploy.mjs
+# (exposed as `pnpm db:migrate:deploy`), which this workflow calls as one gating
+# step. It also drops the template's `pnpm --filter <pkg>` prefixes: jet is a
+# FLAT single-app repo (pnpm-workspace.yaml has no `packages:` field), so every
+# command runs at the repo root.
+#
+# THE ORDER THAT MATTERS (production)
+#   1. install → build            (fail here = bad code, nothing deployed)
+#   2. db:migrate:deploy          (both sets, DIRECT Neon url; fail = STOP)
+#   3. vercel deploy --prod       (only reached if 1 and 2 are green)
+# Migrating BEFORE promoting the app means the app never serves traffic against
+# a half-migrated database. A data-incompatible migration fails at step 2 and
+# the app is simply never promoted — fail-closed by construction.
+#
+# NEON URLS: DIRECT for migrations, POOLED for the running app
+#   - Migrations open a long multi-statement session; pgbouncer transaction
+#     pooling interferes, so migrations use the DIRECT (non-`-pooler`) url.
+#   - The running app opens many short serverless connections, so its
+#     DATABASE_URL is the POOLED (`-pooler`) url, set in the Vercel env panel
+#     (NOT here — that is the app's runtime env, managed in Vercel).
+#
+# REQUIRED REPOSITORY SECRETS (Settings → Secrets and variables → Actions)
+#   VERCEL_TOKEN               Vercel access token
+#   VERCEL_ORG_ID              from .vercel/project.json (after `vercel link`)
+#   VERCEL_PROJECT_ID          from .vercel/project.json
+#   NEON_API_KEY               Neon API key (console → settings → API keys)
+#   NEON_PROJECT_ID            Neon project id
+#   NEON_DIRECT_DATABASE_URL   Neon MAIN branch DIRECT url (no `-pooler`),
+#                              ?sslmode=require — used ONLY by the migrate step.
+#                              This is the SAME database the app uses; it is not
+#                              a new/extra secret domain (§7 preserved).
+#
+# The infra agent does NOT set these — per infra-commandments §4 the operator
+# runs every `gh secret set` / Vercel / Neon command themselves. This file only
+# declares what the pipeline consumes.
+# =============================================================================
+
+name: Deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches: [main]
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # PR opened / updated — Neon branch + BOTH migration sets + Vercel preview
+  # ---------------------------------------------------------------------------
+  preview-deploy:
+    name: Deploy preview
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.action != 'closed'
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create Neon branch
+        id: neon
+        uses: neondatabase/create-branch-action@v5
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch_name: pr/${{ github.event.pull_request.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      # Migrate the branch BEFORE building/deploying so the preview app builds
+      # and runs against a fully-migrated schema — same fail-closed contract as
+      # production. Uses the branch's DIRECT url (db_url, no pooler).
+      - name: Run BOTH migration sets against the branch
+        run: pnpm db:migrate:deploy
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+
+      - name: Build project
+        run: pnpm build
+        env:
+          # Build-time only; the module graph constructs a lazy pg Pool at load.
+          # A real connection is never opened during build (app/page.tsx is
+          # force-dynamic), so the branch url is safe and correct here.
+          DATABASE_URL: ${{ steps.neon.outputs.db_url_with_pooler }}
+
+      - name: Pull Vercel environment (preview)
+        run: npx vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy to Vercel (preview)
+        id: vercel
+        run: |
+          DEPLOY_URL=$(npx vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} \
+            --env DATABASE_URL="${{ steps.neon.outputs.db_url_with_pooler }}")
+          echo "url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              '## Preview deployment',
+              '',
+              `**Vercel URL:** ${{ steps.vercel.outputs.url }}`,
+              `**Neon branch:** \`pr/${{ github.event.pull_request.number }}\``,
+              '',
+              '_Both migration sets (bookings + audit) were applied to the branch._',
+              '_Branch DB and preview deploy are torn down when this PR closes._',
+            ].join('\n');
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+  # ---------------------------------------------------------------------------
+  # PR closed — delete the Neon branch
+  # ---------------------------------------------------------------------------
+  preview-cleanup:
+    name: Cleanup preview
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed'
+
+    steps:
+      - name: Delete Neon branch
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch: pr/${{ github.event.pull_request.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+  # ---------------------------------------------------------------------------
+  # Push to main — production. Build → migrate BOTH sets → deploy (fail-closed).
+  # ---------------------------------------------------------------------------
+  production-deploy:
+    name: Deploy production
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build project
+        run: pnpm build
+
+      # ⛔ GATE: apply BOTH migration sets to the production Neon MAIN branch,
+      # fail-closed, BEFORE the app is promoted. A non-zero exit here aborts the
+      # job and the Vercel production deploy below never runs — the live app is
+      # never pointed at a half-migrated schema. Uses the DIRECT (non-pooled)
+      # Neon url; this is the ONLY step that receives it.
+      - name: Run BOTH migration sets against production
+        run: pnpm db:migrate:deploy
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DIRECT_DATABASE_URL }}
+
+      - name: Pull Vercel environment (production)
+        run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy to Vercel (production)
+        run: npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

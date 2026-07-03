@@ -51,7 +51,7 @@
 //     definition via pg-core `check()` so drizzle-kit emits them in the
 //     generated SQL (in the SQLite era they lived in a hand-written CREATE TABLE
 //     string because there was no migration pipeline):
-//       quantity BETWEEN 1 AND 8  -- FSD §7 fleet size
+//       quantity BETWEEN 1 AND 6  -- FSD §7 fleet size
 //       end_time > start_time      -- non-degenerate window
 //     status / kind no longer need a CHECK — the pgEnum types enforce their
 //     domains natively.
@@ -107,8 +107,11 @@ export const bookings = pgTable(
     // Primary hot read (DEC-P2): all records for one day, by start_time range.
     startTimeIdx: index('idx_bookings_start_time').on(table.startTime),
 
-    // FSD §7 fleet size: a record commits between 1 and 8 scooters.
-    quantityRange: check('bookings_quantity_range', sql`${table.quantity} BETWEEN 1 AND 8`),
+    // FSD §7 fleet size: a record commits between 1 and 6 scooters.
+    // Kept in lockstep with domain/config.ts FLEET_SIZE (the application layer
+    // already caps quantity at 1..FLEET_SIZE in every mutation use case); this
+    // is the storage-layer backstop for the same invariant (archie-rules §2.III).
+    quantityRange: check('bookings_quantity_range', sql`${table.quantity} BETWEEN 1 AND 6`),
     // Non-degenerate window: the booking must occupy positive time.
     windowOrder: check('bookings_window_order', sql`${table.endTime} > ${table.startTime}`),
   }),

@@ -187,18 +187,31 @@ that triggers the workflow).
 
 ### 3. Run migrations against Neon as a deploy step
 
-Migrations are applied with the **direct** (non-pooled) URL — pgbouncer's
-transaction pooling can interfere with the migration session. Either:
-- A CI migrate job (recommended): a deploy-pipeline step that runs
-  `pnpm db:migrate` with `DATABASE_URL` set to the Neon direct URL, gating the
-  app deploy on a green migration; or
-- One-off from your machine:
+jet has **two** independent drizzle-kit migration sets — `bookings`
+(`drizzle.config.ts`) and `audit` (`drizzle.audit.config.ts`) — and **both**
+must be applied on every deploy. They are wrapped in one fail-closed runner,
+`scripts/migrate-deploy.mjs`, exposed as `pnpm db:migrate:deploy`:
+
+- **CI migrate job (this is what runs automatically).**
+  `.github/workflows/deploy.yml` runs `pnpm db:migrate:deploy` as a gating step
+  on every push to `main`, BEFORE the Vercel production deploy. If either set
+  fails, the job aborts and the app is never promoted onto a half-migrated
+  database. The workflow supplies the Neon **direct** (non-pooled) MAIN url via
+  the `NEON_DIRECT_DATABASE_URL` repo secret. Same both-sets step runs against
+  each PR's Neon branch in the preview job.
+
+- **One-off from your machine** (emergency / manual deploy):
   ```bash
   DATABASE_URL="postgres://USER:PASSWORD@ep-xxxx.REGION.aws.neon.tech/DB?sslmode=require" \
-    pnpm db:migrate
+    pnpm db:migrate:deploy
   ```
-  (Note: the *direct* host — no `-pooler` — for migrations; the *pooled* host for
-  the running app.)
+  Runs bookings then audit, aborting on the first failure. (Note: the *direct*
+  host — no `-pooler` — for migrations; the *pooled* host for the running app.)
+
+Migrations are applied with the **direct** (non-pooled) URL — pgbouncer's
+transaction pooling can interfere with the migration session. Idempotency is
+free: `drizzle-kit migrate` tracks applied migrations per journal, so re-running
+a deploy with no new migration files is a no-op for both sets.
 
 ### 4. Branch-per-PR (preview environments)
 

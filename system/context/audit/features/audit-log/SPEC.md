@@ -232,6 +232,10 @@ auditor reviews.
   MOD  modules/audit/infrastructure/repositories/DrizzleAuditEventRepository.ts — removed the `findRecent` method implementation (matches interface — no half-migrated surface)
   PRESERVED (unchanged): recordAuditEvent use case + capability sidecar, append(), schema (modules/audit/schema/), domain/types, auditError, getAuditDatabase singleton, and all recording callers — app/actions.ts, app/login/actions.ts, modules/bookings/infrastructure/adapters/auditWriterAdapter.ts (injected into all 6 bookings mutation use cases).
 
+2026-07-03  spec  Open Follow-ups FU-1 and FU-2 resolved (schema layer).
+  MOD  modules/audit/schema/auditEvents.ts — FU-1: stale "/audit viewer" comments (≈L70, L85) updated to reflect DB-query-only / direct-SQL access (architecture.md §8 — comments match post-edit reality). Applied.
+  KEEP  modules/audit/schema/auditEvents.ts (idx_audit_events_occurred_at) — FU-2: decision to KEEP the `occurred_at DESC` index. Audit access is direct-SQL only (DEC-AU9); `ORDER BY occurred_at DESC` is the natural forensic query, so the index earns its place (archie-rules §2.VI). No migration.
+
 ## Open Follow-ups
 
 <!--
@@ -240,8 +244,8 @@ These are ARCHIE's territory (schema layer) — recorded here so they are not lo
 The spec agent does not fix these; a future archie change-unit should.
 -->
 
-- [ ] **FU-1 — Stale schema comments (owner: archie).** `modules/audit/schema/auditEvents.ts` (≈lines 70 and 85) still contain comments referencing "the /audit viewer", which no longer exists after DEC-AU9. architecture.md §8 — comments describing behavior must match post-edit reality. Archie should update the comments to reflect DB-query-only access. (Schema is archie-owned and was outside the removal change-unit's edits.)
-- [ ] **FU-2 — Now-speculative `idx_audit_events_occurred_at` index (owner: archie).** The `occurred_at DESC` index was justified ENTIRELY by the paginated `/audit` viewer read (DEC-AU8), which is gone. The only remaining repository read is `findByEntity`, served by `idx_audit_events_entity_id`. The DESC index now serves no in-repo read path (archie-rules §2.VI — index where queries hit; architecture.md §8). Archie should decide whether to KEEP it (anticipated future forensic reads / direct DB queries ordering by time) or DROP it. Not blocking.
+- [x] **FU-1 — Stale schema comments (owner: archie). RESOLVED 2026-07-03.** `modules/audit/schema/auditEvents.ts` (≈lines 70 and 85) previously carried comments referencing "the /audit viewer", which no longer exists after DEC-AU9. Those stale comments have been **fixed** (updated to reflect DB-query-only / direct-SQL access). architecture.md §8 satisfied — comments now match post-edit reality.
+- [x] **FU-2 — `idx_audit_events_occurred_at` index (owner: archie). RESOLVED 2026-07-03 — decision: KEEP.** The `occurred_at DESC` index was originally justified by the paginated `/audit` viewer read (DEC-AU8), which is gone. **Decision:** KEEP the index. Audit access is now direct-SQL only (per DEC-AU9), and `ORDER BY occurred_at DESC` is the natural forensic query an operator runs against the trail, so the index earns its place (archie-rules §2.VI — index where queries hit). No migration required.
 
 <!-- AUTO:WORKLOG — appended (never overwritten) by the auditor on every run -->
 ## Worklog

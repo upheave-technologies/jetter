@@ -67,7 +67,8 @@
 //     flagged in the Minimal Change Report §7(a).
 //
 //   - summary is nullable `text` — a short human-readable Croatian description of
-//     the event for the /audit viewer, optional.
+//     the event, optional. Read via direct DB query / findByEntity (the in-app
+//     /audit viewer was removed — DEC-AU9; the log is operator-only now).
 //
 //   - before / after are nullable `jsonb` entity snapshots (archie-rules §2.V:
 //     jsonb, never json). before is null on create; after is null on a
@@ -80,22 +81,32 @@
 //     threaded through the AuditWriter port.
 //
 // Index strategy (archie-rules §2.VI — index where queries hit, not where they
-// might; the two reads below are the ONLY reads the SPEC describes for v1):
-//   - idx_audit_events_occurred_at on (occurred_at DESC): the dominant read is
-//     the paginated /audit viewer — "recent events, newest first" (DEC-AU8). A
-//     descending index serves the ORDER BY occurred_at DESC + LIMIT/OFFSET (or
-//     keyset) page directly without a sort step (archie-rules §2.VI: index every
-//     ORDER BY column of a paginated list). The DESC is a physical property of
+// might):
+//   - idx_audit_events_occurred_at on (occurred_at DESC): serves the natural
+//     operator query against this operator-only log — "recent events, newest
+//     first", `ORDER BY occurred_at DESC LIMIT N`. The in-app /audit viewer that
+//     originally motivated this index was removed (DEC-AU9); the log is now
+//     inspected exclusively by DIRECT DATABASE QUERY (forensic/operator access,
+//     no in-repo caller). Reverse-chronological time ordering is THE canonical
+//     shape of that access — an event log is read newest-first — so the DESC
+//     index still earns its place on the new access model: it lets an operator's
+//     ad-hoc `ORDER BY occurred_at DESC` return without a sort/heap-scan step on
+//     an append-heavy, ever-growing table (archie-rules §2.VI: index every
+//     ORDER BY column of a time-ordered read). The DESC is a physical property of
 //     the index expression, not part of the name — the name follows the plain
 //     §2.VII `idx_{table}_{columns}` convention (idx_audit_events_occurred_at).
-//   - idx_audit_events_entity_id on (entity_id): the second read is "all events
-//     for a given entity_id" — the forensic "what happened to THIS reservation?"
-//     lookup. entity_id is the soft-link JOIN/WHERE target, so it is indexed
-//     (archie-rules §2.VI: index every soft-link / WHERE target of a real read).
-//   No index on entity_type or action: v1 has no filter-by-type/action read
-//   (DEC-AU8 explicitly defers filtering); adding one is a one-line change +
-//   `drizzle-kit generate` if a future filter read justifies it. No speculative
-//   indexes (archie-rules §2.VI).
+//     (KEEP decision, FU-2 — see the audit-log SPEC Open Follow-ups. Trade-off:
+//     one B-tree's write tax on an append-only table, bought against the natural
+//     time-ordered operator read; the read shape is intrinsic to what an audit
+//     log IS, not speculative.)
+//   - idx_audit_events_entity_id on (entity_id): serves "all events for a given
+//     entity_id" — the forensic "what happened to THIS reservation?" lookup,
+//     exposed in code via `findByEntity`. entity_id is the soft-link WHERE
+//     target, so it is indexed (archie-rules §2.VI: index every soft-link /
+//     WHERE target of a real read).
+//   No index on entity_type or action: there is no filter-by-type/action read
+//   path; adding one is a one-line change + `drizzle-kit generate` if a future
+//   filter read justifies it. No speculative indexes (archie-rules §2.VI).
 // =============================================================================
 
 import { pgTable, text, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
@@ -144,7 +155,8 @@ export const auditEvents = pgTable(
     // (§3 deviation) — this log is append-only and immutable. See header.
   },
   (table) => ({
-    // Reverse-chronological paginated viewer read (DEC-AU8).
+    // Reverse-chronological "recent events" read — now via direct DB query
+    // (operator-only; the /audit viewer was removed, DEC-AU9). KEEP: FU-2.
     occurredAtIdx: index('idx_audit_events_occurred_at').on(
       sql`${table.occurredAt} DESC`,
     ),

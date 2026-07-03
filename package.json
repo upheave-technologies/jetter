@@ -13,6 +13,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:generate:audit": "drizzle-kit generate --config=drizzle.audit.config.ts",
     "db:migrate:audit": "drizzle-kit migrate --config=drizzle.audit.config.ts",
+    "db:migrate:deploy": "node scripts/migrate-deploy.mjs",
     "docker:build": "docker compose -f infra/docker-compose.dev.yml build",
     "docker:up": "docker compose -f infra/docker-compose.dev.yml up -d",
     "docker:down": "docker compose -f infra/docker-compose.dev.yml down",

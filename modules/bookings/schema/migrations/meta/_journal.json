@@ -8,6 +8,13 @@
       "when": 1782826863397,
       "tag": "0000_blushing_multiple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783082563139,
+      "tag": "0001_bitter_magneto",
+      "breakpoints": true
     }
   ]
 }

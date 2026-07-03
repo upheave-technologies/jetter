@@ -15,7 +15,7 @@
 // ---------------------------------------------------------------------------
 
 /** Total scooters available (FSD §7). */
-export const FLEET_SIZE = 8;
+export const FLEET_SIZE = 6;
 
 /**
  * Minimum slot granularity in minutes. All offered start times snap to the

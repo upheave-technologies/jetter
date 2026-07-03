@@ -494,6 +494,12 @@ Decision: DEC-F added — the verdict's "free count" is computed at the requeste
 
 DEC-A still holds: the math (`peakCommitment`) lives in `modules/bookings/domain/availability.ts`; the application shell calls it; no duplication.
 
+### 2026-07-03 — fleet size 8 → 6 (reconciliation note)
+
+The operating fleet has been reduced from **8 scooters to 6**. `FLEET_SIZE` is now `6` in `modules/bookings/domain/config.ts`, and the `bookings` table `quantity` CHECK is tightened to `1..6` (generated migration, not yet applied). The **decision of record lives in the sibling reservation-pivot SPEC as DEC-P10** (`system/context/bookings/features/reservation-pivot/SPEC.md`), which is the active change-unit for the current product; booth-board is the superseded historical record of the original send-out lifecycle board.
+
+Scope note for this file: the FSD-verbatim numbers preserved above — R-AVAIL-1/R-AVAIL-2 ("capacity 8"), U-2 ("quantity 1–8 increments"), Decision #3 ("integer `quantity` (1–8)"), the Intent's "8-jet-ski rental booth", and the §17 "8 skis" future-enhancement note — are quotations of the original FSD (§9/§10/§12) and past-tense change-log/verdict entries. They are left **as-is** as the original contract and historical fossil; they are not the current fleet-size claim. The current fleet size is 6 (DEC-P10). No code or FSD quote is rewritten here — this is a pointer so no reader mistakes the archived 8-scooter numbers for the live configuration.
+
 <!-- AUTO:WORKLOG — appended (never overwritten) by the auditor on every run -->
 ## Worklog
 
