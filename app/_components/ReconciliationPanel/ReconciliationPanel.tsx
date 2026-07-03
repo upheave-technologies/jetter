@@ -47,7 +47,11 @@ export type ReconciliationPanelProps = {
   onApply: () => void;
 };
 
-const DROP_QUANTITIES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+// Fleet size — mirrors domain FLEET_SIZE = 6 (DEC-P10, 2026-07-03 fleet reduction 8→6).
+// app/ cannot import modules/**/domain/config (only domain/types is public — project-structure §4),
+// so the fleet cap is mirrored here. Keep in lockstep with domain/config.ts.
+const FLEET_SIZE = 6;
+const DROP_QUANTITIES = Array.from({ length: FLEET_SIZE }, (_, i) => i + 1);
 
 /**
  * Reconciliation proposal panel (DEC-P6).
@@ -189,7 +193,7 @@ export function ReconciliationPanel({
               Broj neispravnih skutera
             </legend>
             <div
-              className="grid grid-cols-8 gap-1.5"
+              className="grid grid-cols-6 gap-1.5"
               role="group"
               aria-label="Broj neispravnih skutera"
             >

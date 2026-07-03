@@ -7,7 +7,11 @@ import { formatHHMM } from '@/lib/time';
 // Re-export DurationPreset so the container can import from a single location
 export type { DurationPreset };
 
-const QUANTITIES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+// Fleet size — mirrors domain FLEET_SIZE = 6 (DEC-P10, 2026-07-03 fleet reduction 8→6).
+// app/ cannot import modules/**/domain/config (only domain/types is public — project-structure §4),
+// so the fleet cap is mirrored here. Keep in lockstep with domain/config.ts.
+const FLEET_SIZE = 6;
+const QUANTITIES = Array.from({ length: FLEET_SIZE }, (_, i) => i + 1);
 const DURATION_PRESETS: { value: DurationPreset; label: string }[] = [
   { value: 30, label: '30 min' },
   { value: 45, label: '45 min' },
@@ -113,7 +117,7 @@ export function BookingFormPanel({
           <legend className="mb-2 text-xs font-bold text-muted-foreground uppercase tracking-widest">
             Skuteri
           </legend>
-          <div className="grid grid-cols-8 gap-1.5" role="group" aria-label="Broj skutera">
+          <div className="grid grid-cols-6 gap-1.5" role="group" aria-label="Broj skutera">
             {QUANTITIES.map((q) => (
               <button
                 key={q}

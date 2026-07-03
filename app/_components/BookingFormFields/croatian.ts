@@ -11,9 +11,9 @@
  * Croatian declension:
  *   1        → "1 skuter"   (nominative singular)
  *   2–4      → "{n} skutera" (plural-genitive)
- *   5–8      → "{n} skutera" (plural-genitive; same form as 2–4 for these values)
+ *   5+       → "{n} skutera" (plural-genitive; same form as 2–4)
  *
- * The only distinction that matters within the 1–8 fleet range:
+ * The only distinction that matters within the 1–6 fleet range:
  *   1 → singular nominative ("skuter")
  *   anything else → plural genitive ("skutera")
  */

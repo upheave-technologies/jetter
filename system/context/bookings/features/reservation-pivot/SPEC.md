@@ -342,6 +342,20 @@ See `HANDOFF.yaml` for the exact error list and full next_steps_for_frankie.
 - 2026-07-03 UPDATE (DEC-P10) — operator confirmed prod is a **clean slate** (no migrations run yet): `0000` CREATEs `bookings` empty with CHECK `1..8`, then `0001_bitter_magneto` DROP/ADDs `1..6` in the same first-deploy pass before any row is written, so the `quantity > 6` pre-deploy gate is **moot on first deploy** (returns 0 by definition) — tighten ships with zero data risk. Original gate retained as the correct check should the tighten ever apply to a populated DB later.
 - Note: prior Change Log / verification entries dated 2026-06-25 (e.g. the `fleet=8` DensityChart entry and the "8 scooters" reconcile scenario) are append-only records of the pre-DEC-P10 state and are left as-is; DEC-P10 is the current fleet-size decision of record.
 
+### 2026-07-03 — frankie (fleet size 6 everywhere — UI scooter-quantity pickers, DEC-P10 completion)
+
+Completes the DEC-P10 8→6 migration tail on the *input* side. The earlier 2026-07-03 CARD/Verdict entry above covered three *display* components (AvailabilityHeader, DensityChart, UtilizationPanel); this entry covers the five *quantity-picker* surfaces that still offered 1–8 and used `grid-cols-8`. All corrected to cap at 6 using the codebase's established "mirror the domain constant with a provenance comment" pattern (`const FLEET_SIZE = 6; QUANTITIES = Array.from({ length: FLEET_SIZE }, …)`), because `app/` cannot import `modules/**/domain/config` — only `domain/types` is public (project-structure §4). Grids changed `grid-cols-8` → `grid-cols-6`.
+
+- MOD `app/_components/BookingFormFields/BookingFormFields.tsx` — quantity segmented control capped at 6 (`FLEET_SIZE = 6`, `QUANTITIES` length 6, `grid grid-cols-6`); provenance comment naming DEC-P10 + the app→domain boundary rationale.
+- MOD `app/_components/BookingFormPanel/BookingFormPanel.tsx` — same `FLEET_SIZE = 6` mirror + `grid-cols-6` quantity group (`aria-label="Broj skutera"`).
+- MOD `app/_components/MaintenanceEditPanel/MaintenanceEditPanel.tsx` — maintenance quantity 1–6 grid (`FLEET_SIZE = 6`, `grid-cols-6`).
+- MOD `app/_components/MaintenanceBlockPanel/MaintenanceBlockPanel.tsx` — block-scooter quantity 1–6 grid (`FLEET_SIZE = 6`, `grid-cols-6`).
+- MOD `app/_components/ReconciliationPanel/ReconciliationPanel.tsx` — capacity-drop quantity picker capped at 6 (`FLEET_SIZE = 6`, `DROP_QUANTITIES` length 6, `grid-cols-6`).
+- MOD `app/_components/BookingFormFields/croatian.ts` — comments corrected to the 1–6 fleet range.
+- Ships together in the production deploy now being triggered, alongside the booking capacity concurrency fix (see the sibling `booking-concurrency` SPEC). Operational note (not a code change-unit): the live Neon DB is missing the `audit_events` table because the audit migration set has not yet run in production — the same deploy applies it.
+
+**Auditor verdict: WARN — one CONCERN (known follow-up, not fixed here).** `FLEET_SIZE = 6` is now mirrored across ~7 UI files (the three display components + these five pickers; some overlap) in addition to the domain SSoT (`modules/bookings/domain/config.ts`) and the schema CHECK. The 8→6 drift that just occurred is exactly the failure a single source of truth prevents. KNOWN FOLLOW-UP: expose the fleet cap through `modules/bookings/domain/types` (public — importable by `app/` without breaching project-structure §4), or introduce one app-side presentational constant fed from a server-component prop, so the next fleet change touches one place instead of seven. Not resolved in this change-unit — recorded so it is not lost. Tagged against `architecture.md §9` (this now sits well past the three-use threshold where the abstraction is justified) and `architecture.md §13` (long-term maintainability).
+
 ## Verification
 
 <!-- Self-verification record (not an AUTO block). Owned by spec/orchestrator, not the auditor. -->

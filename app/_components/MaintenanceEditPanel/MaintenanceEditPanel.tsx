@@ -3,7 +3,7 @@ import { Wrench } from 'lucide-react';
 // =============================================================================
 // MaintenanceEditPanel — pure presentational inline edit panel (DEC-EM5)
 // =============================================================================
-// Renders the maintenance-block edit form: quantity 1–8 grid, Od/Do time
+// Renders the maintenance-block edit form: quantity 1–6 grid, Od/Do time
 // inputs, notes field, Save/Cancel buttons, and an error banner.
 //
 // Mirrors MaintenanceBlockPanel's warning-token styling (DEC-EM5).
@@ -64,7 +64,11 @@ export function MaintenanceEditView(props: MaintenanceEditViewProps) {
   return <MaintenanceEditPanel {...panelProps} />;
 }
 
-const QUANTITIES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+// Fleet size — mirrors domain FLEET_SIZE = 6 (DEC-P10, 2026-07-03 fleet reduction 8→6).
+// app/ cannot import modules/**/domain/config (only domain/types is public — project-structure §4),
+// so the fleet cap is mirrored here. Keep in lockstep with domain/config.ts.
+const FLEET_SIZE = 6;
+const QUANTITIES = Array.from({ length: FLEET_SIZE }, (_, i) => i + 1);
 
 /**
  * Inline edit panel for an existing maintenance block (DEC-EM5).
@@ -104,7 +108,7 @@ export function MaintenanceEditPanel({
           Broj skutera
         </legend>
         <div
-          className="grid grid-cols-8 gap-1.5"
+          className="grid grid-cols-6 gap-1.5"
           role="group"
           aria-label="Broj nedostupnih skutera"
         >
