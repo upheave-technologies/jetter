@@ -16,16 +16,22 @@
 // remain after startTime; quantity stays within 1..FLEET_SIZE; NO fits() check
 // (maintenance is honest over-commitment, DEC-P3); durationMin recomputed.
 //
+// Concurrency: the update runs under a per-day advisory lock
+// (pg_advisory_xact_lock) so it serializes with concurrent reservation writers
+// for the same day. A concurrent createBooking sees the committed maintenance
+// update in its findByDay read, preserving a consistent capacity picture.
+//
 // DEC-EM6 / DEC-AU5 / DEC-AU6: records audit event (maintenance.edit) via
 // injected AuditWriter port with before/after snapshots. Fail-open: audit
 // failure logs CRITICAL but does NOT fail the edit.
+// The audit write is intentionally outside the advisory-lock transaction.
 // =============================================================================
 
 import type { Result } from '@/packages/shared/lib/result';
 import { log } from '@/packages/shared/observability';
 import type { Booking, EditMaintenanceInput, BookingError } from '../domain/types';
 import { canEditMaintenance } from '../domain/booking';
-import { FLEET_SIZE } from '../domain/config';
+import { FLEET_SIZE, toLocalDayStart } from '../domain/config';
 import type { IBookingRepository } from '../domain/repository';
 import type { AuditWriter, AuditContext } from './ports/auditWriter';
 import { bookingErr } from './bookingError';
@@ -154,19 +160,28 @@ export const makeEditMaintenanceUseCase = (deps: EditMaintenanceDeps) => {
 
     // NO fits() check (DEC-EM1 / DEC-P3 / DEC-EM3 — maintenance is honest
     // over-commitment; the operator records reality regardless of fleet size).
+    // The update runs under a per-day advisory lock to serialize with
+    // concurrent reservation writers, which see this committed update via
+    // findByDay inside their own locked transactions.
 
-    const updated: Booking = {
-      ...booking,
-      quantity: newQuantity,
-      startTime: newStartTime,
-      endTime: newEndTime,
-      durationMin,
-      notes: input.notes !== undefined ? input.notes : booking.notes,
-      updatedAt: now,
-    };
+    const day = toLocalDayStart(newStartTime);
 
+    let updated: Booking;
     try {
-      await bookingRepo.update(updated);
+      updated = await bookingRepo.withDayLock(day, async (txRepo) => {
+        const u: Booking = {
+          ...booking!,
+          quantity: newQuantity,
+          startTime: newStartTime,
+          endTime: newEndTime,
+          durationMin,
+          notes: input.notes !== undefined ? input.notes : booking!.notes,
+          updatedAt: now,
+        };
+
+        await txRepo.update(u);
+        return u;
+      });
     } catch (err) {
       useCaseLog.error(
         'booking.update_failed',

@@ -45,4 +45,26 @@ export type IBookingRepository = {
    * Used by all mutation use cases after loading and mutating in memory.
    */
   update: (booking: Booking) => Promise<void>;
+
+  /**
+   * Execute `fn` atomically under a per-day Postgres advisory lock.
+   *
+   * Opens a database transaction, immediately acquires
+   * `pg_advisory_xact_lock(dayKey)` where dayKey is derived from `day`
+   * (days-since-epoch as a bigint), then invokes `fn` with a tx-scoped
+   * IBookingRepository that shares that transaction. The lock is released
+   * automatically when the transaction commits or rolls back.
+   *
+   * Purpose: serialise all capacity-mutating writes for the same calendar day.
+   * Concurrent writers for the same day queue on the advisory lock; the loser
+   * re-reads inside its own transaction, re-runs fits(), and gets a clean
+   * CAPACITY_EXCEEDED if the winner already filled capacity.
+   *
+   * Usage: callers wrap their read → fits() → write sequence inside `fn`.
+   * The `txRepo` passed to `fn` shares the open transaction; both reads and
+   * writes through it are part of the same atomic unit.
+   *
+   * The audit write (DEC-AU6 fail-open) MUST remain outside this call.
+   */
+  withDayLock: <T>(day: Date, fn: (txRepo: IBookingRepository) => Promise<T>) => Promise<T>;
 };

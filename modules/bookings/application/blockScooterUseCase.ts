@@ -7,9 +7,17 @@
 // honest over-commitment is correct; reconciliation (DEC-P6) resolves it.
 // Operators must be able to record reality even when it exceeds fleet size.
 //
+// Concurrency: the save runs under a per-day advisory lock
+// (pg_advisory_xact_lock) so it serializes with concurrent reservation writers
+// for the same day. This ensures that a concurrent createBooking sees the
+// committed maintenance block when it reads findByDay inside its own locked
+// transaction — preventing reservations from being booked over a maintenance
+// block that was committed concurrently.
+//
 // DEC-AU5/DEC-AU6: After a successful save, records an audit event via the
 // injected AuditWriter port. entityType='maintenance', action='create'.
 // Fail-open: audit failure logs CRITICAL but does NOT fail the user's action.
+// The audit write is intentionally outside the advisory-lock transaction.
 // =============================================================================
 
 import { nanoid } from 'nanoid';
@@ -17,7 +25,7 @@ import { nanoid } from 'nanoid';
 import type { Result } from '@/packages/shared/lib/result';
 import { log } from '@/packages/shared/observability';
 import type { Booking, BookingId, CreateMaintenanceInput, BookingError } from '../domain/types';
-import { FLEET_SIZE } from '../domain/config';
+import { FLEET_SIZE, toLocalDayStart } from '../domain/config';
 import type { IBookingRepository } from '../domain/repository';
 import type { AuditWriter, AuditContext } from './ports/auditWriter';
 import { bookingErr } from './bookingError';
@@ -81,29 +89,37 @@ export const makeBlockScooterUseCase = (deps: BlockScooterDeps) => {
       (input.endTime.getTime() - input.startTime.getTime()) / 60_000,
     );
 
-    // --- Build & save (NO fits() check — DEC-P3) -------------------------
+    // --- Build & save under per-day advisory lock (NO fits() check — DEC-P3) ---
+    // No capacity check: operators record reality regardless of fleet size.
+    // The lock serializes this write with concurrent reservation writers for
+    // the same day so they see this committed block in their findByDay read.
 
-    const booking: Booking = {
-      id: nanoid() as BookingId,
-      quantity: input.quantity,
-      startTime: input.startTime,
-      endTime: input.endTime,
-      durationMin,
-      renterName: null,
-      notes: input.notes ?? null,
-      status: 'reserved',
-      kind: 'maintenance',
-      createdAt: now,
-      updatedAt: now,
-    };
+    const day = toLocalDayStart(input.startTime);
 
+    let booking: Booking;
     try {
-      await bookingRepo.save(booking);
+      booking = await bookingRepo.withDayLock(day, async (txRepo) => {
+        const b: Booking = {
+          id: nanoid() as BookingId,
+          quantity: input.quantity,
+          startTime: input.startTime,
+          endTime: input.endTime,
+          durationMin,
+          renterName: null,
+          notes: input.notes ?? null,
+          status: 'reserved',
+          kind: 'maintenance',
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await txRepo.save(b);
+        return b;
+      });
     } catch (err) {
       useCaseLog.error(
         'maintenance.save_failed',
         err instanceof Error ? err : new Error(String(err)),
-        { bookingId: booking.id },
       );
       return {
         success: false,

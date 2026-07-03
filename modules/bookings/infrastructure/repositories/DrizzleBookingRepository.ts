@@ -22,7 +22,7 @@
 // donnie repository pattern (carried forward from booth-board SPEC).
 // =============================================================================
 
-import { and, asc, eq, gte, lt } from 'drizzle-orm';
+import { and, asc, eq, gte, lt, sql } from 'drizzle-orm';
 
 import { log } from '@/packages/shared/observability';
 import type { Booking, BookingId, BookingStatus, BookingKind } from '../../domain/types';
@@ -92,6 +92,19 @@ function bookingToInsert(b: Booking) {
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
+
+/**
+ * Derives a stable advisory lock key for a calendar day.
+ *
+ * Uses days-since-epoch (UTC ms / 86_400_000) as a bigint. All writers for the
+ * same local day produce the same key because toLocalDayStart() floors to the
+ * UTC midnight that corresponds to 00:00 Zagreb — a stable epoch-day boundary.
+ *
+ * The key space is safely within Postgres bigint range for many centuries.
+ */
+function dayLockKey(day: Date): bigint {
+  return BigInt(Math.floor(day.getTime() / 86_400_000));
+}
 
 /**
  * Creates a booking repository backed by the given database instance.
@@ -174,6 +187,27 @@ export function makeBookingRepository(
 
       const durationMs = Date.now() - start;
       repoLog.info('booking.updated', { bookingId: booking.id, durationMs });
+    },
+
+    async withDayLock<T>(day: Date, fn: (txRepo: IBookingRepository) => Promise<T>): Promise<T> {
+      const lockKey = dayLockKey(day);
+
+      return resolvedDb.transaction(async (tx) => {
+        // Acquire a session-level advisory lock scoped to this transaction.
+        // pg_advisory_xact_lock blocks until it can acquire an exclusive lock
+        // on the given key; it releases automatically at transaction end.
+        // All capacity-mutating writers for the same calendar day use the same
+        // key, so they serialize here and the loser re-reads a consistent
+        // snapshot inside its own transaction.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`);
+
+        // Construct a tx-scoped repository so the reads and writes inside fn
+        // share the same transaction and see each other's uncommitted state.
+        // The cast is safe: NodePgTransaction has the same query-builder API as
+        // NodePgDatabase — both extend PgDatabase internally.
+        const txRepo = makeBookingRepository(tx as unknown as BookingsDatabase);
+        return fn(txRepo);
+      });
     },
   };
 }

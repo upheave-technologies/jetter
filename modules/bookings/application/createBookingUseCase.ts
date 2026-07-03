@@ -5,8 +5,11 @@
 //
 // DEC-P2: startTime must be strictly in the future (PAST_START).
 // R-AVAIL-2 / DEC-B: fits() is ALWAYS enforced. No brute-force override.
-// If a race condition causes CAPACITY_EXCEEDED at submit, the UI surfaces it
-// as an error banner.
+// Concurrency: findByDay → fits() → save run atomically inside a Postgres
+// transaction guarded by a per-day advisory lock (pg_advisory_xact_lock).
+// A concurrent writer for the same day blocks on the lock, then re-reads
+// inside its own transaction, re-runs fits(), and gets CAPACITY_EXCEEDED if
+// capacity was filled by the winner — no silent overbooking possible.
 //
 // DEC-AU5/DEC-AU6: After a successful save, records an audit event via the
 // injected AuditWriter port. On audit failure, logs CRITICAL and returns the
@@ -15,6 +18,7 @@
 // the audit DB write fails; that gap is always loudly logged (never swallowed).
 // A shared transaction would prevent the gap but requires coupling the two
 // modules' db handles, which violates module isolation (DEC-AU6 decision).
+// The audit write is intentionally outside the advisory-lock transaction.
 // =============================================================================
 
 import { nanoid } from 'nanoid';
@@ -92,59 +96,60 @@ export const makeCreateBookingUseCase = (deps: CreateBookingDeps) => {
       input.startTime.getTime() + input.durationMin * 60_000,
     );
 
-    // --- Availability check (always enforced) ----------------------------
+    // --- Availability check + save (atomic under per-day advisory lock) ---
+    // All three steps (read, fits, write) run inside a single transaction
+    // guarded by pg_advisory_xact_lock(dayKey). A concurrent writer for the
+    // same day blocks until the lock is released at transaction end, then
+    // re-reads and re-evaluates fits() against the committed state.
 
-    let allBookings: Booking[];
+    const day = toLocalDayStart(input.startTime);
+
+    let booking: Booking;
     try {
-      allBookings = await bookingRepo.findByDay(
-        toLocalDayStart(input.startTime),
-        toLocalDayEnd(input.startTime),
-      );
+      const lockResult = await bookingRepo.withDayLock(day, async (txRepo) => {
+        const allBookings = await txRepo.findByDay(
+          toLocalDayStart(input.startTime),
+          toLocalDayEnd(input.startTime),
+        );
+
+        if (!fits(allBookings, input.quantity, input.startTime, endTime)) {
+          return { ok: false as const };
+        }
+
+        const b: Booking = {
+          id: nanoid() as BookingId,
+          quantity: input.quantity,
+          startTime: input.startTime,
+          endTime,
+          durationMin: input.durationMin,
+          renterName: input.renterName ?? null,
+          notes: input.notes ?? null,
+          status: 'reserved',
+          kind: 'reservation',
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await txRepo.save(b);
+        return { ok: true as const, booking: b };
+      });
+
+      if (!lockResult.ok) {
+        useCaseLog.info('booking.capacity_exceeded', { quantity: input.quantity });
+        return {
+          success: false,
+          error: bookingErr(
+            'CAPACITY_EXCEEDED',
+            'Rezervacija ne stane u trenutnu dostupnost',
+          ),
+        };
+      }
+
+      booking = lockResult.booking;
     } catch (err) {
       useCaseLog.error(
-        'booking.findByDay_failed',
+        'booking.create_failed',
         err instanceof Error ? err : new Error(String(err)),
-      );
-      return {
-        success: false,
-        error: bookingErr('SERVICE_ERROR', 'Failed to load bookings'),
-      };
-    }
-
-    if (!fits(allBookings, input.quantity, input.startTime, endTime)) {
-      useCaseLog.info('booking.capacity_exceeded', { quantity: input.quantity });
-      return {
-        success: false,
-        error: bookingErr(
-          'CAPACITY_EXCEEDED',
-          'Rezervacija ne stane u trenutnu dostupnost',
-        ),
-      };
-    }
-
-    // --- Build & save -----------------------------------------------------
-
-    const booking: Booking = {
-      id: nanoid() as BookingId,
-      quantity: input.quantity,
-      startTime: input.startTime,
-      endTime,
-      durationMin: input.durationMin,
-      renterName: input.renterName ?? null,
-      notes: input.notes ?? null,
-      status: 'reserved',
-      kind: 'reservation',
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    try {
-      await bookingRepo.save(booking);
-    } catch (err) {
-      useCaseLog.error(
-        'booking.save_failed',
-        err instanceof Error ? err : new Error(String(err)),
-        { bookingId: booking.id },
       );
       return {
         success: false,
