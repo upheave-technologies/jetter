@@ -196,36 +196,100 @@ must be applied on every deploy. They are wrapped in one fail-closed runner,
 > The GitHub Actions workflow that used to run migrations-on-deploy is **DISABLED**
 > — it now lives at `.github/workflows/deploy.yml.disabled` (kept as a backup /
 > reference; the `.disabled` extension makes it dormant). Vercel builds and
-> deploys the app directly on push/PR, but **does NOT run drizzle migrations by
-> default**. Until migrations are wired into the Vercel build (see the option
-> below), applying migrations on deploy is a **manual / not-yet-automated** step.
+> deploys the app directly on push/PR, and does not run drizzle migrations on its
+> own — so migrations are wired into the Vercel **build** via a `vercel-build`
+> script (below). Migrations run automatically again, on **production deploys
+> only**.
 
-- **~~CI migrate job (this is what runs automatically).~~ DISABLED.**
-  `.github/workflows/deploy.yml.disabled` (formerly `deploy.yml`) ran
-  `pnpm db:migrate:deploy` as a gating step on every push to `main`, BEFORE the
-  Vercel production deploy — if either set failed, the app was never promoted
-  onto a half-migrated database. That automation is **no longer active**. To
-  preserve migrations-on-deploy under Vercel-native deploys, add a `vercel-build`
-  npm script (or a `buildCommand` in `vercel.json`) that runs
-  `pnpm db:migrate:deploy` against the Neon **DIRECT** url before/as part of the
-  build; a failed migration then fails the build (fail-closed, same contract).
-  Trade-off: the build — and thus the migrate step — runs on **every** deploy
-  including preview branches, so each preview needs its own branch DB url in its
-  Vercel build env. Re-enabling the old workflow instead: rename it back to
-  `deploy.yml` (needs `workflow` push scope).
+- **Vercel build migrate step (this is what runs automatically now).**
+  `package.json` defines a `vercel-build` script — Vercel runs `vercel-build` in
+  preference to `build` when present:
+  ```json
+  "vercel-build": "node scripts/migrate-deploy.mjs && next build"
+  ```
+  Migrations run **first**, then `next build`. Because the two are chained with
+  `&&`, a failed migration aborts the build and **nothing is promoted**
+  (fail-closed, the same contract the disabled workflow had — the app is never
+  pointed at a half-migrated database). `scripts/migrate-deploy.mjs` enforces two
+  guards:
+  - **Production-only.** It migrates **iff** `VERCEL_ENV === 'production'`.
+    Preview and development builds log a one-line skip and proceed straight to
+    the build. Rationale: with the old workflow disabled there is no longer any
+    Neon branch-per-PR automation, so a preview build has no per-preview branch
+    DB to target and must never migrate the production database. (Invoked outside
+    a Vercel build — `VERCEL` unset — the guard is inert, so manual/CI runs
+    behave exactly as before.)
+  - **DIRECT url, not pooled — REQUIRED on a production build.** It uses
+    `NEON_DIRECT_DATABASE_URL` (the Neon **DIRECT**, non-`-pooler` url) and injects
+    it as `DATABASE_URL` for the child `drizzle-kit` processes only — it does
+    **not** overwrite the app's runtime pooled `DATABASE_URL`. drizzle-kit migrate
+    opens a long multi-statement session that pgbouncer transaction pooling
+    breaks, so migrations need the direct url while the running app keeps the
+    pooled one. On a **production** Vercel build (`VERCEL_ENV === 'production'`)
+    this var is **mandatory**: if it is unset/empty the build **fails fast**
+    (`exit 1`, nothing promoted) rather than silently falling back to the pooled
+    `DATABASE_URL` — because the pooled url would hang `drizzle-kit migrate`. Set
+    it as a Vercel Production env var (step 3a). Outside a production build
+    (manual/CI, or Vercel preview/dev which skip), the previous behavior is
+    unchanged: prefer `NEON_DIRECT_DATABASE_URL` if present, else use `DATABASE_URL`.
+  - **Timeout, fail-closed.** Each `drizzle-kit migrate` child is bounded by a
+    120 s timeout. A stall (misconfig, wrong host, network black hole, a wedged
+    pooled session) is killed and treated as a failure — the build aborts with a
+    message naming the failing set (`bookings`/`audit`) instead of hanging until
+    Vercel's outer build timeout.
+
+  You must set `NEON_DIRECT_DATABASE_URL` as a Vercel **Production** environment
+  variable (the Neon MAIN branch **direct**, non-pooled url,
+  `?sslmode=require`) — see step 3a below. Re-enabling the old GitHub Actions
+  workflow instead: rename `deploy.yml.disabled` back to `deploy.yml` (needs
+  `workflow` push scope); if you do, drop the `vercel-build` migrate step to
+  avoid migrating twice.
 
 - **One-off from your machine** (emergency / manual deploy):
   ```bash
   DATABASE_URL="postgres://USER:PASSWORD@ep-xxxx.REGION.aws.neon.tech/DB?sslmode=require" \
     pnpm db:migrate:deploy
   ```
-  Runs bookings then audit, aborting on the first failure. (Note: the *direct*
-  host — no `-pooler` — for migrations; the *pooled* host for the running app.)
+  Runs bookings then audit, aborting on the first failure. `VERCEL` is unset
+  here, so the production-only guard does not apply — it migrates whatever
+  `DATABASE_URL` (or `NEON_DIRECT_DATABASE_URL`, if you prefer to set that) points
+  at. Use the *direct* host (no `-pooler`) for migrations; the *pooled* host is
+  for the running app.
 
 Migrations are applied with the **direct** (non-pooled) URL — pgbouncer's
 transaction pooling can interfere with the migration session. Idempotency is
 free: `drizzle-kit migrate` tracks applied migrations per journal, so re-running
-a deploy with no new migration files is a no-op for both sets.
+a deploy with no new migration files is a no-op for both sets — every re-deploy
+runs the migrate step and, when there is nothing new, does nothing.
+
+### 3a. Set `NEON_DIRECT_DATABASE_URL` on Vercel (Production)  ← REQUIRED for the above
+
+The `vercel-build` migrate step reads `NEON_DIRECT_DATABASE_URL`. On a
+**production** deploy this variable is **required** — if it is missing/empty the
+build fails fast (`exit 1`) and nothing is promoted; the step never falls back to
+the pooled `DATABASE_URL` (which would hang `drizzle-kit migrate`). Set it as a
+Vercel **Production**-scoped environment variable, holding the Neon MAIN branch
+**DIRECT** (non-pooled) connection string:
+
+```bash
+# You run this — the infra agent never sets Vercel env (infra-commandments §4).
+# Value: the DIRECT host (NO `-pooler` subdomain), ?sslmode=require.
+vercel env add NEON_DIRECT_DATABASE_URL production
+#   postgres://USER:PASSWORD@ep-xxxx.REGION.aws.neon.tech/DB?sslmode=require
+```
+
+Do NOT scope it to Preview/Development — the build guard skips migrations there
+anyway, and there is no branch DB to point it at. This is the SAME database the
+app already uses (the app's runtime `DATABASE_URL` is just the **pooled**,
+`-pooler`, variant), so it is not a new secret domain — the two-pipelines rule
+(infra-commandments §7) is preserved. Env changes take effect on the next
+deploy.
+
+**Previews are NOT auto-migrated.** Preview and development builds skip the
+migrate step entirely (production-only guard). If a preview needs a migrated
+schema, migrate its branch DB manually — see `/infra-cloud-triage` for the
+branch-DB walkthrough — or re-enable the disabled workflow's Neon-branch-per-PR
+automation.
 
 ### 4. Branch-per-PR (preview environments)
 
