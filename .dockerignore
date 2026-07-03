@@ -1,0 +1,65 @@
+# =============================================================================
+# .dockerignore — files NOT to ship into the Docker build context.
+# =============================================================================
+# Smaller context  =>  faster builds, smaller images, fewer chances of a
+# secret leaking in by accident.
+# =============================================================================
+
+# Dependencies (re-installed in the builder stage)
+node_modules
+.pnpm-store
+
+# Build outputs (the runner only needs .next/standalone + .next/static, both
+# produced *inside* the build, never shipped *into* it)
+.next
+out
+build
+dist
+
+# Local SQLite database — comes from the bind-mounted ./data volume at runtime
+data
+*.db
+*.db-shm
+*.db-wal
+
+# Local development environment
+.env
+.env.local
+.env.*.local
+infra/.env
+infra/.ports
+infra/.compose.override.yml
+infra/.stack
+infra/certs
+
+# Version control + CI noise
+.git
+.gitignore
+.github
+
+# Editor / OS cruft
+.vscode
+.idea
+.DS_Store
+*.swp
+
+# Test, log, and trace output
+coverage
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+
+# Stack kit internals — runtime artefacts, not source the image needs
+infra/_kit/test
+infra/_kit/.cache
+
+# Captain compiler output (derived; regenerated on session start)
+system/state.json
+
+# Misc local-only files
+*.pem
+.vercel
+.turbo

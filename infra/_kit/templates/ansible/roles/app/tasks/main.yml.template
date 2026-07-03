@@ -1,0 +1,46 @@
+---
+- name: Create /opt/__APP_SLUG__ directory
+  ansible.builtin.file:
+    path: /opt/__APP_SLUG__
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+
+- name: Deploy .env file from vault
+  ansible.builtin.template:
+    src: env.j2
+    dest: /opt/__APP_SLUG__/.env
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0600"
+
+- name: Copy docker-compose.yml
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../docker-compose.vps.yml"
+    dest: /opt/__APP_SLUG__/docker-compose.yml
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0644"
+
+- name: Copy Caddyfile
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../Caddyfile.prod"
+    dest: /opt/__APP_SLUG__/Caddyfile.prod
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0644"
+
+- name: Login to GHCR
+  become_user: "{{ deploy_user }}"
+  ansible.builtin.shell:
+    cmd: echo "{{ vault_ghcr_token }}" | docker login ghcr.io -u github --password-stdin
+  changed_when: false
+  no_log: true
+
+- name: Pull images and start stack
+  become_user: "{{ deploy_user }}"
+  ansible.builtin.command:
+    cmd: docker compose up -d --pull always
+    chdir: /opt/__APP_SLUG__
+  changed_when: true

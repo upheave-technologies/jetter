@@ -1,0 +1,7 @@
+# __APP_SLUG__.loc is served with a cert signed by mkcert's local CA.
+# Generate / refresh certs with:  stack tls install
+# (writes infra/certs/__APP_SLUG__.loc.pem + ...-key.pem; both are gitignored)
+__APP_SLUG__.loc {
+    reverse_proxy __APP_SERVICE__:4100
+    tls /etc/caddy/certs/__APP_SLUG__.loc.pem /etc/caddy/certs/__APP_SLUG__.loc-key.pem
+}

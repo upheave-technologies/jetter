@@ -1,0 +1,185 @@
+# Neon Database Setup — __APP_NAME__
+
+This document covers how to set up and maintain the Neon Postgres database for
+**__APP_NAME__** (`__APP_SLUG__`). Neon provides serverless Postgres with
+copy-on-write branching — each pull request gets its own isolated database
+branch, and the production main branch is always clean.
+
+---
+
+## 1. Create a Neon project
+
+1. Sign in at <https://console.neon.tech>.
+2. Click **New Project**.
+3. Name it `__APP_SLUG__` and choose the region closest to your Vercel region
+   (e.g. `us-east-1` for `iad1`).
+4. Select the Postgres version your project requires (default: latest stable).
+5. Note the **Project ID** — you'll need it for `NEON_PROJECT_ID` in GitHub
+   Actions and `neonctl` commands.
+
+---
+
+## 2. Connection strings
+
+After project creation, go to **Connection Details** in the Neon console. You
+need two strings:
+
+| String | Use | Where to paste |
+|--------|-----|----------------|
+| **Pooled** (pgbouncer) | Application queries | `DATABASE_URL` in Vercel |
+| **Direct** (raw) | Drizzle Kit migrations | `DIRECT_DATABASE_URL` in Vercel |
+
+Paste both into:
+- Vercel Dashboard → Project → Settings → Environment Variables (scope: Production + Preview)
+- Your local `infra/.env.cloud.production.example` checklist (see
+  `infra/.env.cloud.production.example`)
+
+For local development, use `infra/.env` (the Docker-based stack with a local
+Postgres container). Do not point local dev at Neon unless you intentionally
+want to share the cloud DB.
+
+---
+
+## 3. Main branch vs. PR branches
+
+Neon uses **branches** as the unit of isolation, not separate projects.
+
+| Branch | Created by | Purpose |
+|--------|-----------|---------|
+| `main` | Neon console | Production database. Never deleted. |
+| `pr/<number>` | GitHub Actions workflow | Ephemeral per-PR branch. Deleted on PR close. |
+
+The GitHub Actions workflow at `.github/workflows/preview.yml` handles branch
+creation and deletion automatically via the
+[Neon GitHub Action](https://neon.tech/docs/guides/branching-github-actions).
+
+---
+
+## 4. Branch-per-PR strategy
+
+When a pull request is opened:
+
+1. The workflow creates a branch `pr/<number>` from `main`.
+2. Drizzle Kit migrations are applied to the branch.
+3. The Vercel preview deployment receives the branch's `DATABASE_URL`.
+4. A PR comment is posted with both the Vercel preview URL and the branch
+   connection string.
+
+When the PR is merged or closed, the branch is deleted. This means:
+- Preview environments are always isolated from each other and from production.
+- Reviewers can inspect or modify the PR's DB state without affecting main.
+- No manual cleanup required.
+
+To connect to a PR branch locally for debugging:
+
+```bash
+# Get the connection string for pr/42
+neonctl connection-string pr/42 --project-id <NEON_PROJECT_ID>
+
+# Connect with psql
+psql "$(neonctl connection-string pr/42 --project-id <NEON_PROJECT_ID>)"
+
+# Or apply a seed against the branch
+DATABASE_URL="$(neonctl connection-string pr/42 --project-id <NEON_PROJECT_ID>)" \
+  infra/_kit/bin/stack seed apply <scenario>
+```
+
+---
+
+## 5. Autosuspend settings
+
+Neon branches autosuspend after a period of idle (5 minutes on the free tier,
+configurable on paid tiers). The compute endpoint wakes on the next connection
+request with a brief cold start (~200–500ms).
+
+**Recommendations:**
+
+| Branch | Autosuspend | Rationale |
+|--------|-------------|-----------|
+| `main` (production) | Disabled or 5+ minutes | Avoid cold-start latency for real users |
+| `pr/*` (preview) | Default (5 min) | They're idle most of the time; suspend saves compute |
+
+To disable autosuspend on the main branch:
+
+1. Neon Console → Project → Branches → `main` → Edit Compute.
+2. Set **Autosuspend delay** to **disabled** (paid plan required).
+
+Or via `neonctl`:
+
+```bash
+neonctl branches update main \
+  --project-id <NEON_PROJECT_ID> \
+  --suspend-timeout 0
+```
+
+---
+
+## 6. CLI quick reference
+
+Install the Neon CLI:
+
+```bash
+npm install -g neonctl
+neonctl auth       # opens browser for OAuth
+```
+
+Common operations:
+
+```bash
+# List projects
+neonctl projects list
+
+# List branches for this project
+neonctl branches list --project-id <NEON_PROJECT_ID>
+
+# Get a connection string (pooled)
+neonctl connection-string main --project-id <NEON_PROJECT_ID> --pooled
+
+# Create a branch manually (testing)
+neonctl branches create --project-id <NEON_PROJECT_ID> --name test/manual --parent main
+
+# Delete a branch
+neonctl branches delete test/manual --project-id <NEON_PROJECT_ID>
+
+# Inspect compute endpoints
+neonctl endpoints list --project-id <NEON_PROJECT_ID>
+```
+
+---
+
+## 7. Point-in-time recovery
+
+Neon retains a rolling backup window (7 days on free tier, longer on paid). To
+restore to a previous point in time, create a branch from a timestamp:
+
+```bash
+# Create a branch from 2 hours ago
+neonctl branches create \
+  --project-id <NEON_PROJECT_ID> \
+  --name recovery/2h-ago \
+  --parent main \
+  --parent-timestamp "$(date -u -v-2H +%Y-%m-%dT%H:%M:%SZ)"
+
+# Inspect the recovered data
+psql "$(neonctl connection-string recovery/2h-ago --project-id <NEON_PROJECT_ID>)"
+
+# If data looks good, swap production — update DATABASE_URL in Vercel to point
+# at the recovery branch, then redeploy. (This is a manual override; handle
+# with care.)
+```
+
+Note: Neon does not have a built-in "restore in place" to the main branch.
+The standard approach is branch-from-timestamp + verify + either roll forward
+or copy data back.
+
+---
+
+## 8. Next steps
+
+After completing this setup:
+
+1. Paste both connection strings into Vercel (see Section 2).
+2. Push a commit to `main` to trigger the first production deployment.
+3. Open a test PR to verify the branch-per-PR workflow creates a preview deploy
+   and posts the comment.
+4. Run `stack doctor` locally to verify everything is wired correctly.

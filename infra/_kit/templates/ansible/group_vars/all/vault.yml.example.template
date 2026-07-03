@@ -1,0 +1,12 @@
+# Copy to vault.yml and encrypt with: ansible-vault encrypt group_vars/all/vault.yml
+# These are the variables you need to set:
+
+vault_postgres_password: "CHANGE_ME"  # Alphanumeric only! Generate with: openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32
+vault_ghcr_token: "CHANGE_ME"  # GitHub PAT with read:packages scope
+
+# Add your app-specific secrets below.
+# Naming convention: vault_<secret_name>
+# Reference them in roles/app/templates/env.j2
+
+# Example:
+# vault___APP_SLUG___api_key: "CHANGE_ME"

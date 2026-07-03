@@ -1,0 +1,13 @@
+{
+  "buildCommand": "pnpm --filter __APP_PACKAGE__ build",
+  "outputDirectory": "__APP_PATH__/.next",
+  "framework": "nextjs",
+  "installCommand": "pnpm install",
+  "devCommand": "pnpm --filter __APP_PACKAGE__ dev",
+  "regions": ["iad1"],
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  }
+}

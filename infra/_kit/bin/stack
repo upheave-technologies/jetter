@@ -1,0 +1,1284 @@
+#!/usr/bin/env bash
+# =============================================================================
+# stack — The single infrastructure CLI for every Nucleus-based project.
+# =============================================================================
+# Invoke from anywhere inside the repo:
+#   infra/_kit/bin/stack <command> [args]
+#
+# Or add an alias in your project's package.json:
+#   "scripts": { "stack": "infra/_kit/bin/stack" }
+#
+# Commands:
+#   up [--profile P] [--seed S]                 Boot the local stack
+#   down [--volumes] [--release-ports]          Stop the local stack
+#   restart [<service>]                         Restart core or named service
+#   logs [<service>] [--follow] [--since 10m]   Tail container logs
+#   ps                                          Show running services
+#   ports                                       Show port allocation
+#   psql [<args>]                               Open psql against the local DB
+#   exec <cmd>                                  Run a command inside the app container
+#   reset                                       Wipe containers + volumes (confirmation required)
+#   seed <subcommand>                           Scenario seed runner
+#   doctor [--quiet]                            Diagnose environment
+#   dashboard [start|stop|status|json]          Cross-project tracker
+#   tunnel [provider]                           Expose locally for webhook testing
+#   triage <where> <kind>                       Production triage
+#
+# Every command runs a preflight that emits actionable hints on failure.
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+LIB_DIR="$SCRIPT_DIR/../lib"
+
+# shellcheck source=../lib/_common.sh
+source "$LIB_DIR/_common.sh"
+# shellcheck source=../lib/ports.sh
+source "$LIB_DIR/ports.sh"
+# shellcheck source=../lib/state.sh
+source "$LIB_DIR/state.sh"
+# shellcheck source=../lib/compose.sh
+source "$LIB_DIR/compose.sh"
+# shellcheck source=../lib/doctor.sh
+source "$LIB_DIR/doctor.sh"
+# shellcheck source=../lib/seed.sh
+source "$LIB_DIR/seed.sh"
+# shellcheck source=../lib/prod.sh
+source "$LIB_DIR/prod.sh"
+# shellcheck source=../lib/preflight.sh
+source "$LIB_DIR/preflight.sh"
+# shellcheck source=../lib/tls.sh
+source "$LIB_DIR/tls.sh"
+# shellcheck source=../lib/lifecycle.sh
+source "$LIB_DIR/lifecycle.sh"
+# shellcheck source=../lib/sandbox.sh
+source "$LIB_DIR/sandbox.sh"
+
+# -----------------------------------------------------------------------------
+# Friendly exit handler — runs on every exit. Surfaces a hint for non-zero
+# exits unless STACK_QUIET_EXIT is set.
+# -----------------------------------------------------------------------------
+
+_omega_on_exit() {
+  local rc=$?
+  if (( rc != 0 )) && [[ -z "${STACK_QUIET_EXIT:-}" ]]; then
+    printf "\n%s» stack exited with code %d.%s\n" "${C_DIM}" "$rc" "${C_RESET}" >&2
+    printf "  %sTry%s   stack doctor   %sfor an environment check, or%s   stack help   %sfor usage.%s\n" \
+      "${C_DIM}" "${C_RESET}" "${C_DIM}" "${C_RESET}" "${C_DIM}" "${C_RESET}" >&2
+  fi
+  return "$rc"
+}
+trap _omega_on_exit EXIT
+
+# -----------------------------------------------------------------------------
+# Argument parsing (very small; we keep getopt-light to stay portable).
+# -----------------------------------------------------------------------------
+
+CMD=${1:-}
+shift || true
+
+# -----------------------------------------------------------------------------
+# Commands — every one starts with a preflight that emits actionable hints.
+# -----------------------------------------------------------------------------
+
+cmd_help() {
+  # Best-effort slug. If the kit isn't installed, falls back to basename.
+  local slug
+  slug=$(stack_project_slug 2>/dev/null || basename "$STACK_REPO_ROOT")
+
+  cat <<HELP
+${C_BOLD}stack — Nucleus Stack Kit CLI${C_RESET}  ${C_DIM}(project: ${slug})${C_RESET}
+
+${C_BOLD}LIFECYCLE${C_RESET}
+  stack up [--profile P] [--seed S]
+  stack down [--volumes] [--release-ports]
+  stack restart [<service>]
+  stack reset
+
+${C_BOLD}INSPECTION${C_RESET}
+  stack ps
+  stack ports
+  stack doctor [--quiet]
+  stack logs [<service>] [--follow] [--since 10m]
+
+${C_BOLD}ACCESS${C_RESET}
+  stack psql [<args>]                     # interactive or one-shot SQL
+  stack exec <cmd>                        # run a command inside the app container
+  stack tunnel [ngrok|cloudflared]        # expose locally for webhook testing
+  stack tls install                       # mkcert-signed HTTPS cert for <slug>.loc
+  stack tls status                        # cert path + expiry + trust chain
+  stack tls renew                         # regenerate cert (idempotent)
+
+${C_BOLD}SEEDS${C_RESET}
+  stack seed list
+  stack seed apply <name>
+  stack seed inspect <name>
+  stack seed new <name>
+  stack seed reset
+
+${C_BOLD}LIFECYCLE${C_RESET}
+  stack lifecycle list                    # show manifest-declared hooks
+  stack lifecycle run <phase>             # run one phase ad-hoc (post_up | pre_down)
+  stack up   --no-hooks                   # skip post_up hooks (one-time)
+  stack down --no-hooks                   # skip pre_down hooks (one-time)
+
+${C_BOLD}SETUP${C_RESET}
+  stack install-shell                     # make 'stack' work from anywhere (asks before editing rc)
+  stack install-shell --no-rc             # copy integration file only; print rc snippet
+  stack install-shell --status            # is shell integration installed + sourced?
+  stack bootstrap render [--profile P] [--slug S] [--local-only] [--non-interactive]
+                                          # render kit templates for a new project
+
+${C_BOLD}SANDBOXES — ephemeral isolated stacks for testing${C_RESET}
+  stack sandbox create [--name X] [--ttl 1h] [--no-hooks] [--quiet]
+  stack sandbox list                      # all active sandboxes (across projects)
+  stack sandbox destroy <id> [<id>...]    # tear down one or more
+  stack sandbox destroy --all             # tear down every sandbox for this project
+  stack sandbox gc                        # reap any past TTL (runs lazily on every command)
+  stack sandbox inspect <id>              # registry entry as JSON
+  stack sandbox <id> ps                   # ps for one sandbox
+  stack sandbox <id> psql [args]          # psql into one sandbox
+  stack sandbox <id> exec <cmd>           # exec inside one sandbox
+  stack sandbox <id> logs [args]          # logs from one sandbox
+  stack sandbox <id> seed apply <name>    # apply scenario seed to one sandbox
+  stack sandbox <id> lifecycle run <phase>  # re-run hooks against one sandbox
+
+${C_BOLD}DASHBOARD${C_RESET}
+  stack dashboard                         # open in browser (starts if needed)
+  stack dashboard json                    # state as JSON
+  stack dashboard stop
+
+${C_BOLD}PRODUCTION${C_RESET}
+  stack triage prod                       # see /infra-prod-triage skill
+  stack triage cloud                      # see /infra-cloud-triage skill
+
+For full documentation, see ${C_BOLD}infra/AGENT_MANUAL.md${C_RESET}.
+For a friendly intro, see ${C_BOLD}infra/_kit/README.md${C_RESET}.
+HELP
+}
+
+cmd_doctor() {
+  local quiet=0
+  for a in "$@"; do
+    [[ "$a" == "--quiet" ]] && quiet=1
+  done
+  stack_doctor "$quiet"
+}
+
+cmd_ports() {
+  stack_preflight ports || return 1
+  if [[ ! -f "$STACK_REPO_ROOT/infra/.ports" ]]; then
+    stack_warn "no port allocation yet — run \`stack up\` or this command will allocate."
+    stack_info "computing what they would be..."
+  fi
+  stack_ensure_ports
+}
+
+cmd_ps() {
+  stack_preflight ps || return 1
+  local profile
+  profile=$(stack_default_profile)
+  stack_compose "$profile" ps
+}
+
+cmd_up() {
+  local profile seed skip_hooks=0
+  profile=$(stack_default_profile)
+
+  while (( $# > 0 )); do
+    case $1 in
+      --profile)    profile=$2; shift 2 ;;
+      --profile=*)  profile=${1#*=}; shift ;;
+      --seed)       seed=$2; shift 2 ;;
+      --seed=*)     seed=${1#*=}; shift ;;
+      --no-hooks)   skip_hooks=1; shift ;;
+      --ephemeral)
+        stack_fail "--ephemeral is deprecated — replaced by 'stack sandbox create'" \
+                   "Use:  ID=\$(stack sandbox create --quiet)   then  stack sandbox \$ID …   See infra/AGENT_MANUAL.md §5.7."
+        return 1
+        ;;
+      *)
+        stack_fail "unknown flag for \`up\`: $1" \
+                   "Run \`stack help\` to see supported flags."
+        return 1
+        ;;
+    esac
+  done
+
+  stack_step "Preflight"
+  stack_preflight up "$profile" || return 1
+  stack_ok "Preflight passed."
+
+  stack_step "Allocate ports"
+  # Evaluate the output into the current shell so $STACK_PORT_* is set.
+  eval "$(stack_ensure_ports)"
+  stack_ok "Key:    $STACK_KEY"
+  stack_ok "App:    ${STACK_PORT_APP}"
+  stack_ok "DB:     ${STACK_PORT_DB}"
+  stack_ok "HTTPS:  ${STACK_PORT_PROXY_HTTPS:-—}"
+
+  stack_step "Boot compose stack (profile=$profile)"
+  stack_compose_port_override "$profile" >/dev/null
+  if ! stack_compose_with_override "$profile" up -d --build; then
+    stack_fail "Compose failed to bring the stack up." \
+               "Run \`stack logs $(stack_service_app)\` for the boot output, or \`stack doctor\` for environment checks."
+    return 1
+  fi
+
+  stack_step "Register in dashboard registry"
+  local slug worktree app_path proj svc_app svc_db svc_proxy domain_dev
+  slug=$(stack_project_slug)
+  worktree=$(stack_current_worktree)
+  app_path=$STACK_REPO_ROOT
+  proj=$(stack_compose_project_name)
+  svc_app=$(stack_service_app)
+  svc_db=$(stack_service_db)
+  svc_proxy=$(stack_service_proxy)
+  domain_dev=$(stack_domain_dev)
+  local id="${slug}-${worktree}"
+
+  # Resolve actually-bound host ports from the running stack. When
+  # compose_port_override=false the allocator's port numbers are advisory and
+  # the actual bindings come from the project's own compose (e.g. caddy 80/443).
+  # When override is on, the allocator drives compose, so the bound port == the
+  # allocator's port.
+  local bound_app bound_db bound_https
+  bound_app=$(stack_bound_port   "$profile" "$svc_app"   4100)
+  bound_db=$(stack_bound_port    "$profile" "$svc_db"    5432)
+  bound_https=$(stack_bound_port "$profile" "$svc_proxy" 443)
+  # If a service is not host-bound (stack_bound_port returns "0"), we keep the
+  # 0 — that tells the dashboard to skip probing it and the URL builder below
+  # to skip listing it. Recording the allocator's would-be port would be a lie.
+
+  # Build the URL list from what actually works.
+  local urls=""
+  if [[ -n "$domain_dev" ]] && [[ "$bound_https" != "0" ]]; then
+    if [[ "$bound_https" == "443" ]]; then
+      urls="https://${domain_dev}"
+    else
+      urls="https://${domain_dev}:${bound_https}"
+    fi
+  fi
+  if [[ "$bound_app" != "0" ]]; then
+    [[ -n "$urls" ]] && urls="${urls},"
+    urls="${urls}http://localhost:${bound_app}"
+  fi
+
+  stack_state_register "$id" "$slug" "$worktree" "$app_path" "$profile" "$proj" \
+    "$bound_app" "$bound_db" "$bound_https" "0" "$urls"
+  stack_ok "Registered: $id  (app=$bound_app  db=$bound_db  proxy_https=$bound_https)"
+
+  # Optional: start dashboard if not running
+  if [[ "$(stack_manifest features.dashboard_auto_start true)" == "true" ]]; then
+    "$SCRIPT_DIR/stack-dashboard" start --quiet 2>/dev/null || \
+      stack_warn "Dashboard failed to auto-start (non-fatal). Try \`stack dashboard\` manually."
+  fi
+
+  # Optional: apply seed
+  if [[ -n "${seed:-}" ]]; then
+    stack_step "Apply seed: $seed"
+    stack_seed_apply "$seed" || {
+      stack_warn "Seed failed — stack is up but DB may not be in the expected state."
+      stack_hint "Run \`stack seed inspect $seed\` to see what should have happened, or apply manually."
+    }
+  fi
+
+  # Run manifest-declared post_up lifecycle hooks (migrations, project seeds, etc.)
+  # unless the user passed --no-hooks.
+  if (( ! skip_hooks )); then
+    stack_lifecycle_run post_up || {
+      stack_warn "A post_up hook failed — the stack is up but bootstrap is incomplete."
+      stack_hint "Re-run with \`stack up\` once you've fixed the failing step (hooks are idempotent),"
+      stack_hint "or skip the chain with \`stack up --no-hooks\`."
+    }
+  fi
+
+  stack_step "Up"
+  if [[ -n "$domain_dev" ]] && [[ "$bound_https" != "0" ]]; then
+    if [[ "$bound_https" == "443" ]]; then
+      printf "\n  %sproxy:%s     https://%s   ${C_DIM}(self-signed)%s\n" "$C_BOLD" "$C_RESET" "$domain_dev" "$C_RESET"
+    else
+      printf "\n  %sproxy:%s     https://%s:%s   ${C_DIM}(self-signed)%s\n" "$C_BOLD" "$C_RESET" "$domain_dev" "$bound_https" "$C_RESET"
+    fi
+  fi
+  if [[ "$bound_app" != "0" ]]; then
+    printf "  %sapp:%s       http://localhost:%s\n" "$C_BOLD" "$C_RESET" "$bound_app"
+  fi
+  if [[ "$bound_db" != "0" ]]; then
+    printf "  %sdb:%s        postgres://$(stack_db_user)@localhost:%s/$(stack_db_name)\n" "$C_BOLD" "$C_RESET" "$bound_db"
+  fi
+  printf "  %sdashboard:%s http://localhost:%s\n\n" "$C_BOLD" "$C_RESET" "$STACK_DASHBOARD_PORT"
+  printf "  %sLogs:%s    stack logs $(stack_service_app) --follow\n" "$C_DIM" "$C_RESET"
+  printf "  %sPsql:%s    stack psql\n" "$C_DIM" "$C_RESET"
+  printf "  %sDown:%s    stack down\n\n" "$C_DIM" "$C_RESET"
+}
+
+cmd_down() {
+  local volumes=0 release_ports=0 skip_hooks=0
+  while (( $# > 0 )); do
+    case $1 in
+      --volumes|-v)     volumes=1; shift ;;
+      --release-ports)  release_ports=1; shift ;;
+      --no-hooks)       skip_hooks=1; shift ;;
+      *)
+        stack_fail "unknown flag for \`down\`: $1" \
+                   "Supported flags:  --volumes (drop DB volume)   --release-ports (free the port allocation)   --no-hooks (skip pre_down hooks)."
+        return 1
+        ;;
+    esac
+  done
+
+  stack_preflight down || return 1
+
+  local profile proj slug worktree id
+  profile=$(stack_default_profile)
+  proj=$(stack_compose_project_name)
+  slug=$(stack_project_slug); worktree=$(stack_current_worktree)
+  id="${slug}-${worktree}"
+
+  # Run pre_down hooks (unless skipped) before tearing the stack down.
+  if (( ! skip_hooks )); then
+    stack_lifecycle_run pre_down || {
+      stack_warn "A pre_down hook failed — continuing with shutdown anyway."
+    }
+  fi
+
+  stack_step "Bring down compose stack ($proj)"
+  if (( volumes )); then
+    stack_warn "Volumes will be removed."
+    stack_compose "$profile" down --volumes
+  else
+    stack_compose "$profile" down
+  fi
+
+  stack_state_unregister "$id" || true
+  stack_state_unregister "${id}-eph" || true
+
+  if (( release_ports )); then
+    local key="${slug}@${worktree}"
+    stack_forget_alloc "$key"
+    stack_ok "Released port allocation for $key"
+  fi
+  stack_ok "Down."
+}
+
+cmd_restart() {
+  stack_preflight restart || return 1
+  local profile
+  profile=$(stack_default_profile)
+  if (( $# == 0 )); then
+    stack_compose "$profile" restart
+  else
+    stack_compose "$profile" restart "$@"
+  fi
+}
+
+cmd_logs() {
+  stack_preflight logs || return 1
+  local profile svc=
+  profile=$(stack_default_profile)
+  # First arg if it doesn't start with -- is the service.
+  if (( $# > 0 )) && [[ "$1" != --* ]]; then
+    svc=$1; shift
+  fi
+  [[ -z "$svc" ]] && svc=$(stack_service_app)
+  stack_compose "$profile" logs --timestamps "$svc" "$@"
+}
+
+cmd_psql() {
+  stack_preflight psql || return 1
+  local profile svc_db user db
+  profile=$(stack_default_profile)
+  svc_db=$(stack_service_db)
+  user=$(stack_db_user)
+  db=$(stack_db_name)
+  if (( $# == 0 )); then
+    stack_compose "$profile" exec "$svc_db" psql -U "$user" -d "$db"
+  else
+    stack_compose "$profile" exec -T "$svc_db" psql -U "$user" -d "$db" "$@"
+  fi
+}
+
+cmd_exec() {
+  stack_preflight exec || return 1
+  if (( $# == 0 )); then
+    stack_fail "\`stack exec\` requires a command to run." \
+               "Example:  stack exec npx drizzle-kit migrate"
+    return 1
+  fi
+  local profile svc_app
+  profile=$(stack_default_profile)
+  svc_app=$(stack_service_app)
+  stack_compose "$profile" exec "$svc_app" "$@"
+}
+
+cmd_reset() {
+  stack_preflight reset || return 1
+  stack_warn "This will:"
+  echo "  - Stop all containers for this worktree"
+  echo "  - Delete all volumes (DB data WILL be lost)"
+  echo "  - Unregister the instance from the dashboard"
+  echo "  - Keep port allocation (use --release-ports to drop it too)"
+  if ! stack_confirm "Are you sure?" "yes drop the database"; then
+    stack_err "Aborted."
+    return 1
+  fi
+  cmd_down --volumes
+  stack_ok "Reset complete."
+}
+
+cmd_seed() {
+  local sub=${1:-list}; shift || true
+  case $sub in
+    list)
+      stack_preflight seed-list || return 1
+      stack_seed_list ;;
+    apply)
+      stack_preflight seed-apply || return 1
+      if (( $# == 0 )); then
+        stack_fail "\`stack seed apply\` requires a scenario name." \
+                   "List available scenarios:  stack seed list"
+        return 1
+      fi
+      stack_seed_apply "$@" ;;
+    inspect)
+      stack_preflight seed-inspect || return 1
+      if (( $# == 0 )); then
+        stack_fail "\`stack seed inspect\` requires a scenario name." \
+                   "List available scenarios:  stack seed list"
+        return 1
+      fi
+      stack_seed_inspect "$@" ;;
+    new)
+      stack_preflight seed-new || return 1
+      if (( $# == 0 )); then
+        stack_fail "\`stack seed new\` requires a scenario name." \
+                   "Naming convention: <prefix>-<name>.sql where prefix is 00 (system), 10 (fixture), 20 (scenario), 99 (ephemeral)."
+        return 1
+      fi
+      stack_seed_new "$@" ;;
+    reset)
+      stack_preflight seed-reset || return 1
+      stack_seed_reset ;;
+    *)
+      # Shorthand: `stack seed <name>` → apply
+      stack_preflight seed-apply || return 1
+      stack_seed_apply "$sub" "$@"
+      ;;
+  esac
+}
+
+cmd_dashboard() {
+  stack_preflight dashboard || return 1
+  "$SCRIPT_DIR/stack-dashboard" "$@"
+}
+
+cmd_tunnel() {
+  stack_preflight tunnel || return 1
+  local provider=${1:-$(stack_manifest tunnel.default ngrok)}
+  local target_host
+  target_host=$(stack_manifest tunnel.target_hostname "$(stack_domain_dev)")
+  stack_check_tunnel_provider "$provider" || return 1
+  case $provider in
+    ngrok)
+      stack_info "Starting ngrok tunnel to https://$target_host"
+      printf "After startup, set provider webhook URLs to the printed https://*.ngrok-free.app URL.\n"
+      ngrok http "https://$target_host"
+      ;;
+    cloudflared)
+      stack_info "Starting cloudflared tunnel"
+      cloudflared tunnel --url "https://$target_host"
+      ;;
+    portless)
+      stack_info "Starting portless (assumes \`portless proxy start\` is already running)"
+      portless run "$@" || true
+      ;;
+    *)
+      stack_fail "unknown tunnel provider: $provider" \
+                 "Supported:  ngrok | cloudflared | portless"
+      return 1
+      ;;
+  esac
+}
+
+cmd_sandbox() {
+  local first=${1:-}
+  shift || true
+  case "$first" in
+    create)
+      stack_preflight up || return 1
+      stack_sandbox_create "$@"
+      ;;
+    list|ls)
+      stack_sandbox_list
+      ;;
+    destroy|rm)
+      if [[ "${1:-}" == "--all" ]]; then
+        stack_sandbox_destroy_all
+      elif [[ $# -eq 0 ]]; then
+        stack_fail "stack sandbox destroy requires an id (or --all)" \
+                   "List active sandboxes:  stack sandbox list"
+        return 1
+      else
+        local rc=0
+        for id in "$@"; do
+          stack_sandbox_destroy "$id" || rc=$?
+        done
+        return $rc
+      fi
+      ;;
+    gc)
+      stack_sandbox_gc
+      ;;
+    inspect)
+      if [[ -z "${1:-}" ]]; then
+        stack_fail "stack sandbox inspect requires an id" "List:  stack sandbox list"
+        return 1
+      fi
+      stack_sandbox_inspect "$1"
+      ;;
+    "")
+      stack_fail "stack sandbox requires a subcommand or sandbox id" \
+                 "Try:  stack sandbox list  |  stack sandbox create [--name X] [--ttl 1h]"
+      return 1
+      ;;
+    *)
+      # Treat first arg as an instance ID. Validate + load context + dispatch.
+      stack_sandbox_load_context "$first" || return 1
+      local sub=${1:-}; shift || true
+      case "$sub" in
+        ps)         cmd_ps ;;
+        psql)       cmd_psql "$@" ;;
+        exec)       cmd_exec "$@" ;;
+        logs)       cmd_logs "$@" ;;
+        seed)       cmd_seed "$@" ;;
+        lifecycle)  cmd_lifecycle "$@" ;;
+        inspect|"") stack_sandbox_inspect "$first" ;;
+        *)
+          stack_fail "unknown scoped subcommand: $sub" \
+                     "Supported when sandbox-scoped:  ps | psql | exec | logs | seed | lifecycle | inspect"
+          return 1
+          ;;
+      esac
+      ;;
+  esac
+}
+
+cmd_install_shell() {
+  local edit_rc=1
+  local check_only=0
+  while (( $# > 0 )); do
+    case $1 in
+      --no-rc)  edit_rc=0; shift ;;
+      --status) check_only=1; shift ;;
+      *) stack_fail "unknown flag for install-shell: $1" "Supported: --no-rc | --status"; return 1 ;;
+    esac
+  done
+
+  local src="$STACK_KIT_DIR/shell-integration.sh"
+  local dst="$STACK_HOME/shell-integration.sh"
+
+  if [[ ! -f "$src" ]]; then
+    stack_fail "Missing kit file: $src" "The kit installation may be incomplete. Re-run /infra-bootstrap repair."
+    return 1
+  fi
+
+  # Detect shell + rc file from $SHELL
+  local shell_name rc_file
+  case "${SHELL:-}" in
+    *zsh*)
+      shell_name=zsh
+      rc_file="$HOME/.zshrc"
+      ;;
+    *bash*)
+      shell_name=bash
+      if [[ "$(uname)" == "Darwin" ]] && [[ -f "$HOME/.bash_profile" ]]; then
+        rc_file="$HOME/.bash_profile"
+      else
+        rc_file="$HOME/.bashrc"
+      fi
+      ;;
+    *fish*)
+      shell_name=fish
+      rc_file="$HOME/.config/fish/config.fish"
+      ;;
+    *)
+      shell_name=unknown
+      rc_file=""
+      ;;
+  esac
+
+  if (( check_only )); then
+    stack_step "Shell integration status"
+    if [[ -f "$dst" ]]; then
+      stack_ok "Installed at $dst"
+    else
+      stack_warn "$dst not present"
+    fi
+    if [[ -n "$rc_file" ]] && [[ -f "$rc_file" ]] && grep -q "stack/shell-integration.sh" "$rc_file" 2>/dev/null; then
+      stack_ok "Sourced from $rc_file"
+    else
+      stack_warn "Not sourced from any shell rc (detected: ${rc_file:-unknown})"
+    fi
+    return 0
+  fi
+
+  # Phase 1 — copy the integration file (always safe, no rc touched)
+  stack_step "Install shell-integration.sh to ~/.stack/"
+  mkdir -p "$STACK_HOME"
+  if cmp -s "$src" "$dst" 2>/dev/null; then
+    stack_ok "$dst already up-to-date"
+  else
+    cp "$src" "$dst"
+    stack_ok "Wrote $dst"
+  fi
+
+  if (( ! edit_rc )); then
+    stack_info "Skipping rc edit (--no-rc). Add this line manually to your shell rc:"
+    printf "\n  %s[[ -f ~/.stack/shell-integration.sh ]] && source ~/.stack/shell-integration.sh%s\n\n" "${C_BOLD}" "${C_RESET}"
+    return 0
+  fi
+
+  if [[ "$shell_name" == "unknown" ]] || [[ -z "$rc_file" ]]; then
+    stack_warn "Could not detect your shell from \$SHELL (=${SHELL:-unset})."
+    stack_hint "Add this line manually to your shell's rc:"
+    printf "\n  %s[[ -f ~/.stack/shell-integration.sh ]] && source ~/.stack/shell-integration.sh%s\n\n" "${C_BOLD}" "${C_RESET}"
+    return 0
+  fi
+
+  if [[ -f "$rc_file" ]] && grep -q "stack/shell-integration.sh" "$rc_file" 2>/dev/null; then
+    stack_ok "$rc_file already sources the integration — nothing to do."
+    stack_hint "Open a new shell (or 'source $rc_file') if you haven't already."
+    return 0
+  fi
+
+  # Phase 2 — rc edit (asks first, per Commandment Three)
+  stack_step "Append shell integration line to $rc_file"
+  printf "\n  %sI am about to append these two lines to %s%s:%s\n\n" \
+    "${C_YELLOW}" "${C_BOLD}" "$rc_file" "${C_RESET}"
+  printf "    # Nucleus Stack Kit shell integration\n"
+  printf "    [[ -f ~/.stack/shell-integration.sh ]] && source ~/.stack/shell-integration.sh\n\n"
+
+  if ! stack_confirm "Approve this rc edit?" "yes edit my $shell_name rc"; then
+    stack_warn "Skipped. To install manually, append the snippet above to $rc_file yourself."
+    return 0
+  fi
+
+  [[ ! -f "$rc_file" ]] && touch "$rc_file"
+
+  {
+    printf "\n# Nucleus Stack Kit shell integration\n"
+    printf '[[ -f ~/.stack/shell-integration.sh ]] && source ~/.stack/shell-integration.sh\n'
+  } >> "$rc_file"
+
+  stack_ok "Appended to $rc_file"
+  printf "\n  Activate now without restarting your shell:\n"
+  printf "    %ssource %s%s\n\n" "${C_BOLD}" "$rc_file" "${C_RESET}"
+  printf "  Then test:  cd to any stack-equipped repo and type:  %sstack help%s\n\n" "${C_BOLD}" "${C_RESET}"
+}
+
+cmd_lifecycle() {
+  local sub=${1:-list}; shift || true
+  case $sub in
+    list)
+      stack_preflight ports || return 1
+      stack_lifecycle_list
+      ;;
+    run)
+      local phase=${1:-}
+      if [[ -z "$phase" ]]; then
+        stack_fail "\`stack lifecycle run\` requires a phase." \
+                   "Supported phases:  post_up | pre_down.  Example:  stack lifecycle run post_up"
+        return 1
+      fi
+      stack_preflight psql || return 1
+      stack_lifecycle_run "$phase"
+      ;;
+    *)
+      stack_fail "unknown lifecycle subcommand: $sub" \
+                 "Supported:  list (show declared hooks) | run <phase> (execute one phase). See infra/AGENT_MANUAL.md."
+      return 1
+      ;;
+  esac
+}
+
+cmd_tls() {
+  local sub=${1:-status}; shift || true
+  case $sub in
+    install)
+      stack_preflight tls-install || return 1
+      stack_tls_install ;;
+    renew)
+      stack_preflight tls-renew || return 1
+      stack_tls_renew ;;
+    status)
+      stack_preflight tls-status || return 1
+      stack_tls_status ;;
+    uninstall)
+      stack_preflight tls-uninstall || return 1
+      stack_tls_uninstall ;;
+    "")
+      stack_fail "\`stack tls\` requires a subcommand." \
+                 "Supported:  install | status | renew | uninstall.  See infra/_kit/TLS.md for the full guide."
+      return 1
+      ;;
+    *)
+      stack_fail "unknown tls subcommand: $sub" \
+                 "Supported:  install | status | renew | uninstall.  See infra/_kit/TLS.md."
+      return 1
+      ;;
+  esac
+}
+
+cmd_bootstrap() {
+  local sub=${1:-help}; shift || true
+  case "$sub" in
+    render)  cmd_bootstrap_render "$@" ;;
+    help|"")
+      printf "%s\n" "${C_BOLD}stack bootstrap render${C_RESET} — render kit templates into this project"
+      printf "\n"
+      printf "  %sUsage:%s  stack bootstrap render [OPTIONS]\n\n" "${C_DIM}" "${C_RESET}"
+      printf "  %s--profile vps|cloud|hybrid%s   Deploy target profile  (default: cloud)\n" "${C_DIM}" "${C_RESET}"
+      printf "  %s--slug <name>%s                App slug (kebab-case)   (default: cwd basename)\n" "${C_DIM}" "${C_RESET}"
+      printf "  %s--name <App Name>%s            Human-readable name    (default: titlecased slug)\n" "${C_DIM}" "${C_RESET}"
+      printf "  %s--service <svc>%s              Docker compose service (default: slug)\n" "${C_DIM}" "${C_RESET}"
+      printf "  %s--package <pkg>%s              pnpm package name      (default: slug)\n" "${C_DIM}" "${C_RESET}"
+      printf "  %s--app-path <path>%s            Monorepo app path      (default: apps/<slug>)\n" "${C_DIM}" "${C_RESET}"
+      printf "  %s--domain-prod <host>%s         Production domain\n" "${C_DIM}" "${C_RESET}"
+      printf "  %s--gh-org <org>%s               GitHub org/user (for GHCR image path, VPS profile)\n" "${C_DIM}" "${C_RESET}"
+      printf "  %s--local-only, -l%s             Render only local-dev files (manifest, compose, Caddy, .env)\n" "${C_DIM}" "${C_RESET}"
+      printf "  %s--non-interactive%s            Use flag values without prompting\n" "${C_DIM}" "${C_RESET}"
+      printf "  %s--force%s                      Overwrite existing destination files\n" "${C_DIM}" "${C_RESET}"
+      printf "  %s--quiet%s                      Suppress non-essential output\n" "${C_DIM}" "${C_RESET}"
+      ;;
+    *)
+      stack_fail "unknown bootstrap subcommand: $sub" \
+                 "Supported:  render | help.  See /infra-bootstrap skill for the full interactive install."
+      return 1
+      ;;
+  esac
+}
+
+cmd_bootstrap_render() {
+  # -------------------------------------------------------------------------
+  # Parse flags
+  # -------------------------------------------------------------------------
+  local opt_profile=""
+  local opt_slug=""
+  local opt_name=""
+  local opt_service=""
+  local opt_package=""
+  local opt_app_path=""
+  local opt_domain_prod=""
+  local opt_gh_org=""
+  local opt_non_interactive=0
+  local opt_force=0
+  local opt_quiet=0
+  local opt_local_only=0
+
+  while (( $# > 0 )); do
+    case $1 in
+      --profile)           opt_profile=$2;       shift 2 ;;
+      --profile=*)         opt_profile=${1#*=};  shift ;;
+      --slug)              opt_slug=$2;          shift 2 ;;
+      --slug=*)            opt_slug=${1#*=};     shift ;;
+      --name)              opt_name=$2;          shift 2 ;;
+      --name=*)            opt_name=${1#*=};     shift ;;
+      --service)           opt_service=$2;       shift 2 ;;
+      --service=*)         opt_service=${1#*=};  shift ;;
+      --package)           opt_package=$2;       shift 2 ;;
+      --package=*)         opt_package=${1#*=};  shift ;;
+      --app-path)          opt_app_path=$2;      shift 2 ;;
+      --app-path=*)        opt_app_path=${1#*=}; shift ;;
+      --domain-prod)       opt_domain_prod=$2;   shift 2 ;;
+      --domain-prod=*)     opt_domain_prod=${1#*=}; shift ;;
+      --gh-org)            opt_gh_org=$2;        shift 2 ;;
+      --gh-org=*)          opt_gh_org=${1#*=};   shift ;;
+      --local-only|-l)     opt_local_only=1;     shift ;;
+      --non-interactive|-q) opt_non_interactive=1; shift ;;
+      --force|-f)          opt_force=1;          shift ;;
+      --quiet)             opt_quiet=1;          shift ;;
+      *)
+        stack_fail "unknown flag for \`bootstrap render\`: $1" \
+                   "Run \`stack bootstrap help\` for supported flags."
+        return 1
+        ;;
+    esac
+  done
+
+  # -------------------------------------------------------------------------
+  # Locate the templates directory (relative to the kit)
+  # -------------------------------------------------------------------------
+  local templates_dir="$STACK_KIT_DIR/templates"
+  if [[ ! -d "$templates_dir" ]]; then
+    stack_fail "Templates directory not found at $templates_dir" \
+               "The kit installation may be incomplete. Re-run /infra-bootstrap repair."
+    return 1
+  fi
+
+  # -------------------------------------------------------------------------
+  # Helper: prompt for a value, or use the default when --non-interactive
+  # -------------------------------------------------------------------------
+  _bootstrap_prompt() {
+    local var_name=$1 prompt_text=$2 default=$3
+    if (( opt_non_interactive )); then
+      printf "%s" "$default"
+      return
+    fi
+    printf "%s [%s]: " "$prompt_text" "${C_BOLD}${default}${C_RESET}" >&2
+    local answer
+    read -r answer
+    printf "%s" "${answer:-$default}"
+  }
+
+  # -------------------------------------------------------------------------
+  # Derive defaults from package.json if available, then prompt
+  # -------------------------------------------------------------------------
+  local pkg_json="$STACK_REPO_ROOT/package.json"
+
+  # Detect slug from package.json "name" field (strip scope, collapse to kebab)
+  local pkg_name_raw=""
+  if [[ -f "$pkg_json" ]]; then
+    pkg_name_raw=$(python3 -c "import json,sys; d=json.load(open('$pkg_json')); print(d.get('name',''))" 2>/dev/null || true)
+  fi
+
+  # Strip leading @scope/ if present
+  local slug_default
+  slug_default=$(printf "%s" "$pkg_name_raw" | sed -e 's|^@[^/]*/||' -e 's|[^a-z0-9-]|-|g' -e 's|^-*||' -e 's|-*$||')
+  [[ -z "$slug_default" ]] && slug_default=$(basename "$STACK_REPO_ROOT")
+
+  # Collect values (prompt if not supplied by flags)
+  local slug name service package app_path domain_prod profile deploy_target default_profile
+
+  slug="${opt_slug:-$(_bootstrap_prompt slug "App slug (kebab-case)" "$slug_default")}"
+  [[ -z "$slug" ]] && { stack_fail "slug cannot be empty"; return 1; }
+
+  # Titlecase default name from slug
+  local name_default
+  name_default=$(printf "%s" "$slug" | sed -e 's/-/ /g' | awk '{for(i=1;i<=NF;i++){$i=toupper(substr($i,1,1))substr($i,2)}}1')
+
+  name="${opt_name:-$(_bootstrap_prompt name "Human-readable app name" "$name_default")}"
+  [[ -z "$name" ]] && name="$name_default"
+
+  service="${opt_service:-$(_bootstrap_prompt service "Docker compose service name" "$slug")}"
+  [[ -z "$service" ]] && service="$slug"
+
+  package="${opt_package:-$(_bootstrap_prompt package "pnpm package name" "$slug")}"
+  [[ -z "$package" ]] && package="$slug"
+
+  app_path="${opt_app_path:-$(_bootstrap_prompt app_path "Monorepo app path" "apps/$slug")}"
+  [[ -z "$app_path" ]] && app_path="apps/$slug"
+
+  # Upper-snake version of slug for use in YAML comments (__APP_SLUG_UPPER__)
+  local slug_upper
+  slug_upper=$(printf "%s" "$slug" | tr '[:lower:]-' '[:upper:]_')
+
+  # Profile → derive deploy_target and default_profile
+  local profile_default="${opt_profile:-cloud}"
+  profile="${opt_profile:-$(_bootstrap_prompt profile "Deploy profile (vps|cloud|hybrid)" "$profile_default")}"
+  [[ -z "$profile" ]] && profile="cloud"
+
+  case "$profile" in
+    vps)     deploy_target="vps";    default_profile="full" ;;
+    cloud)   deploy_target="cloud";  default_profile="cloud" ;;
+    hybrid)  deploy_target="hybrid"; default_profile="full" ;;
+    *)
+      stack_fail "unknown profile: $profile" "Supported: vps | cloud | hybrid"
+      return 1
+      ;;
+  esac
+
+  local domain_prod_default="${slug}.example.com"
+  domain_prod="${opt_domain_prod:-$(_bootstrap_prompt domain_prod "Production domain" "$domain_prod_default")}"
+  [[ -z "$domain_prod" ]] && domain_prod="$domain_prod_default"
+
+  # gh_org is only required for VPS/hybrid profiles (GHCR image path)
+  local gh_org=""
+  if [[ "$profile" == "vps" || "$profile" == "hybrid" ]]; then
+    local gh_org_default
+    gh_org_default=$(git -C "$STACK_REPO_ROOT" remote get-url origin 2>/dev/null \
+      | sed -E 's|.*[:/]([^/]+)/[^/]+\.git.*|\1|' \
+      | sed -E 's|.*[:/]([^/]+)/[^/]+$|\1|' || echo "your-org")
+    [[ -z "$gh_org_default" ]] && gh_org_default="your-org"
+    gh_org="${opt_gh_org:-$(_bootstrap_prompt gh_org "GitHub org/user (for GHCR image path)" "$gh_org_default")}"
+    [[ -z "$gh_org" ]] && gh_org="$gh_org_default"
+  fi
+
+  local installed_at
+  installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
+
+  # -------------------------------------------------------------------------
+  # Helper: escape a value for safe sed substitution
+  # -------------------------------------------------------------------------
+  _sed_escape() {
+    printf '%s\n' "$1" | sed -e 's/[\\&]/\\&/g' -e 's|/|\\/|g'
+  }
+
+  # -------------------------------------------------------------------------
+  # Helper: perform all placeholder substitutions on stdin → stdout
+  # -------------------------------------------------------------------------
+  _substitute() {
+    local esc_slug esc_slug_upper esc_name esc_service esc_package esc_app_path
+    local esc_domain_prod esc_deploy_target esc_default_profile esc_installed_at esc_gh_org
+    esc_slug=$(_sed_escape "$slug")
+    esc_slug_upper=$(_sed_escape "$slug_upper")
+    esc_name=$(_sed_escape "$name")
+    esc_service=$(_sed_escape "$service")
+    esc_package=$(_sed_escape "$package")
+    esc_app_path=$(_sed_escape "$app_path")
+    esc_domain_prod=$(_sed_escape "$domain_prod")
+    esc_deploy_target=$(_sed_escape "$deploy_target")
+    esc_default_profile=$(_sed_escape "$default_profile")
+    esc_installed_at=$(_sed_escape "$installed_at")
+    esc_gh_org=$(_sed_escape "${gh_org:-your-org}")
+
+    sed \
+      -e "s/__APP_SLUG__/${esc_slug}/g" \
+      -e "s/__APP_SLUG_UPPER__/${esc_slug_upper}/g" \
+      -e "s/__APP_NAME__/${esc_name}/g" \
+      -e "s/__APP_SERVICE__/${esc_service}/g" \
+      -e "s/__APP_PACKAGE__/${esc_package}/g" \
+      -e "s/__APP_PATH__/${esc_app_path}/g" \
+      -e "s/__DOMAIN_PROD__/${esc_domain_prod}/g" \
+      -e "s/__APP_DOMAIN_DEV__/${esc_slug}.loc/g" \
+      -e "s/__DEPLOY_TARGET__/${esc_deploy_target}/g" \
+      -e "s/__DEFAULT_PROFILE__/${esc_default_profile}/g" \
+      -e "s/__INSTALLED_AT__/${esc_installed_at}/g" \
+      -e "s/__GH_ORG__/${esc_gh_org}/g"
+  }
+
+  # -------------------------------------------------------------------------
+  # Helper: render one template → destination (with overwrite guard)
+  # -------------------------------------------------------------------------
+  # _render_template <src_template> <dst_file>
+  _render_template() {
+    local src=$1 dst=$2
+    if [[ ! -f "$src" ]]; then
+      (( opt_quiet )) || stack_warn "template not found, skipping: $src"
+      return 0
+    fi
+    if [[ -f "$dst" ]] && (( ! opt_force )); then
+      (( opt_quiet )) || stack_warn "exists (skipping): $dst  — pass --force to overwrite"
+      return 0
+    fi
+    mkdir -p "$(dirname "$dst")"
+    _substitute < "$src" > "$dst"
+    (( opt_quiet )) || stack_ok "wrote $dst"
+  }
+
+  # -------------------------------------------------------------------------
+  # Summary header (unless quiet)
+  # -------------------------------------------------------------------------
+  if (( ! opt_quiet )); then
+    stack_step "Bootstrap render"
+    stack_info "slug:    $slug"
+    stack_info "name:    $name"
+    stack_info "profile: $profile"
+    (( opt_local_only )) && stack_info "mode:    local-only (only dev files rendered)"
+    stack_info "service: $service"
+    stack_info "package: $package"
+    stack_info "app:     $app_path"
+    stack_info "domain:  $domain_prod"
+    [[ -n "$gh_org" ]] && stack_info "gh-org:  $gh_org"
+    printf "\n" >&2
+  fi
+
+  # -------------------------------------------------------------------------
+  # Render templates
+  # -------------------------------------------------------------------------
+  local infra_dir="$STACK_REPO_ROOT/infra"
+
+  _render_template \
+    "$templates_dir/manifest.yaml.template" \
+    "$STACK_REPO_ROOT/infra/_kit/manifest.yaml"
+
+  _render_template \
+    "$templates_dir/docker-compose.dev.yml.template" \
+    "$infra_dir/docker-compose.dev.yml"
+
+  _render_template \
+    "$templates_dir/Caddyfile.dev.template" \
+    "$infra_dir/Caddyfile.dev"
+
+  _render_template \
+    "$templates_dir/.env.example.template" \
+    "$infra_dir/.env.example"
+
+  _render_template \
+    "$templates_dir/app.env.local.example.template" \
+    "$STACK_REPO_ROOT/$app_path/.env.local.example"
+
+  # -------------------------------------------------------------------------
+  # Cloud profile templates (cloud or hybrid) — skipped when --local-only
+  # -------------------------------------------------------------------------
+  if (( ! opt_local_only )) && [[ "$profile" == "cloud" || "$profile" == "hybrid" ]]; then
+    _render_template \
+      "$templates_dir/vercel.json.template" \
+      "$STACK_REPO_ROOT/vercel.json"
+
+    _render_template \
+      "$templates_dir/github-workflows-preview.yml.template" \
+      "$STACK_REPO_ROOT/.github/workflows/preview.yml"
+
+    _render_template \
+      "$templates_dir/.env.cloud.production.example.template" \
+      "$infra_dir/.env.cloud.production.example"
+
+    _render_template \
+      "$templates_dir/neon-setup.md.template" \
+      "$infra_dir/neon-setup.md"
+  fi
+
+  # -------------------------------------------------------------------------
+  # VPS profile templates (vps or hybrid) — skipped when --local-only
+  # -------------------------------------------------------------------------
+  if (( ! opt_local_only )) && [[ "$profile" == "vps" || "$profile" == "hybrid" ]]; then
+    _render_template \
+      "$templates_dir/Caddyfile.prod.template" \
+      "$infra_dir/Caddyfile.prod"
+
+    _render_template \
+      "$templates_dir/docker-compose.vps.yml.template" \
+      "$infra_dir/docker-compose.vps.yml"
+
+    _render_template \
+      "$templates_dir/Dockerfile.app.template" \
+      "$infra_dir/Dockerfile.app"
+
+    _render_template \
+      "$templates_dir/github-workflows-deploy.yml.template" \
+      "$STACK_REPO_ROOT/.github/workflows/deploy.yml"
+
+    # Ansible tree — walk every .template file and render it preserving structure
+    while IFS= read -r -d '' tmpl_file; do
+      # Strip the leading "$templates_dir/ansible/" prefix and the trailing .template
+      local rel_path
+      rel_path="${tmpl_file#"$templates_dir/ansible/"}"
+      rel_path="${rel_path%.template}"
+      local dst_file="$infra_dir/ansible/$rel_path"
+      _render_template "$tmpl_file" "$dst_file"
+    done < <(find "$templates_dir/ansible" -type f -name "*.template" -print0 2>/dev/null | sort -z)
+  fi
+
+  # -------------------------------------------------------------------------
+  # Idempotently append .gitignore section
+  # -------------------------------------------------------------------------
+  local gitignore="$STACK_REPO_ROOT/.gitignore"
+  local marker_start="# nucleus-stack:start"
+  local marker_end="# nucleus-stack:end"
+
+  if [[ -f "$gitignore" ]] && grep -qF "$marker_start" "$gitignore" 2>/dev/null; then
+    (( opt_quiet )) || stack_info ".gitignore: nucleus-stack section already present — skipping"
+    # Idempotently add the host .env.local entry (may be missing in older renders)
+    local env_local_entry="${app_path}/.env.local"
+    if ! grep -qF "$env_local_entry" "$gitignore" 2>/dev/null; then
+      local tmp_gi
+      tmp_gi=$(mktemp)
+      sed "s|${marker_end}|${env_local_entry}\n${marker_end}|" "$gitignore" > "$tmp_gi" && mv "$tmp_gi" "$gitignore"
+      (( opt_quiet )) || stack_ok ".gitignore: added $env_local_entry"
+    fi
+    # For VPS profile: idempotently add VPS-specific entries inside the existing section
+    if [[ "$profile" == "vps" || "$profile" == "hybrid" ]]; then
+      local vps_entries=(
+        "infra/ansible/.vault_pass"
+        "infra/ansible/group_vars/all/vault.yml"
+        "infra/ansible/inventory/hosts.yml"
+      )
+      for entry in "${vps_entries[@]}"; do
+        if ! grep -qF "$entry" "$gitignore" 2>/dev/null; then
+          # Insert before the end marker
+          local tmp_gi
+          tmp_gi=$(mktemp)
+          sed "s|${marker_end}|${entry}\n${marker_end}|" "$gitignore" > "$tmp_gi" && mv "$tmp_gi" "$gitignore"
+          (( opt_quiet )) || stack_ok ".gitignore: added $entry"
+        fi
+      done
+    fi
+  else
+    (( opt_quiet )) || stack_info ".gitignore: appending nucleus-stack section"
+    {
+      printf "\n%s\n" "$marker_start"
+      printf "infra/.env\n"
+      printf "infra/.ports\n"
+      printf "infra/.compose.override.yml\n"
+      printf "infra/certs/\n"
+      printf "infra/_kit/manifest.yaml\n"
+      printf "%s/.env.local\n" "$app_path"
+      printf "!%s/.env.local.example\n" "$app_path"
+      if [[ "$profile" == "vps" || "$profile" == "hybrid" ]]; then
+        printf "infra/ansible/.vault_pass\n"
+        printf "infra/ansible/group_vars/all/vault.yml\n"
+        printf "infra/ansible/inventory/hosts.yml\n"
+      fi
+      printf "%s\n" "$marker_end"
+    } >> "$gitignore"
+    (( opt_quiet )) || stack_ok "appended .gitignore entries"
+  fi
+
+  # -------------------------------------------------------------------------
+  # Post-render check: verify no leftover placeholders
+  # -------------------------------------------------------------------------
+  local leftover=0
+  local rendered_files=(
+    "$STACK_REPO_ROOT/infra/_kit/manifest.yaml"
+    "$infra_dir/docker-compose.dev.yml"
+    "$infra_dir/Caddyfile.dev"
+    "$infra_dir/.env.example"
+    "$STACK_REPO_ROOT/$app_path/.env.local.example"
+  )
+
+  # Add cloud-rendered files to the check when applicable (and not --local-only)
+  if (( ! opt_local_only )) && [[ "$profile" == "cloud" || "$profile" == "hybrid" ]]; then
+    rendered_files+=(
+      "$STACK_REPO_ROOT/vercel.json"
+      "$STACK_REPO_ROOT/.github/workflows/preview.yml"
+      "$infra_dir/.env.cloud.production.example"
+      "$infra_dir/neon-setup.md"
+    )
+  fi
+
+  # Add VPS-rendered files to the check when applicable (and not --local-only)
+  if (( ! opt_local_only )) && [[ "$profile" == "vps" || "$profile" == "hybrid" ]]; then
+    rendered_files+=(
+      "$infra_dir/Caddyfile.prod"
+      "$infra_dir/docker-compose.vps.yml"
+      "$infra_dir/Dockerfile.app"
+      "$STACK_REPO_ROOT/.github/workflows/deploy.yml"
+    )
+    # Add rendered ansible files
+    if [[ -d "$infra_dir/ansible" ]]; then
+      while IFS= read -r -d '' af; do
+        rendered_files+=("$af")
+      done < <(find "$infra_dir/ansible" -type f -print0 2>/dev/null | sort -z)
+    fi
+  fi
+
+  for f in "${rendered_files[@]}"; do
+    if [[ -f "$f" ]] && grep -q '__[A-Z][A-Z_]*__' "$f" 2>/dev/null; then
+      stack_warn "leftover placeholder(s) in $f:"
+      grep -o '__[A-Z][A-Z_]*__' "$f" | sort -u | while read -r p; do
+        stack_hint "  $p"
+      done
+      leftover=1
+    fi
+  done
+
+  if (( leftover )); then
+    stack_warn "Some placeholders were not substituted. Check the flags above and re-run with --force."
+    return 1
+  fi
+
+  # -------------------------------------------------------------------------
+  # Summary
+  # -------------------------------------------------------------------------
+  if (( ! opt_quiet )); then
+    printf "\n"
+    stack_ok "Render complete. Next steps:"
+    stack_hint "cp infra/.env.example infra/.env   # then fill in dev secrets"
+    stack_hint "stack doctor                        # verify the environment"
+    stack_hint "stack tls install                   # generate local HTTPS cert (optional)"
+    stack_hint "stack up                            # boot the local stack"
+    if (( ! opt_local_only )) && [[ "$profile" == "cloud" || "$profile" == "hybrid" ]]; then
+      printf "\n"
+      stack_info "Cloud / Vercel + Neon next steps:"
+      stack_hint "cat infra/.env.cloud.production.example   # copy each var into Vercel dashboard"
+      stack_hint "cat infra/neon-setup.md                   # Neon project + branch setup guide"
+      stack_hint "vercel link                                # link repo to Vercel project (writes .vercel/)"
+      stack_hint "# Set GitHub Actions secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID,"
+      stack_hint "#   NEON_API_KEY, NEON_PROJECT_ID — see infra/.env.cloud.production.example"
+      stack_hint "git push origin main                       # first production deploy"
+    fi
+    if (( ! opt_local_only )) && [[ "$profile" == "vps" || "$profile" == "hybrid" ]]; then
+      printf "\n"
+      stack_info "VPS / Ansible next steps:"
+      stack_hint "cd infra/ansible"
+      stack_hint "cp inventory/hosts.yml.example inventory/hosts.yml   # fill in VPS IP"
+      stack_hint "cp group_vars/all/vars.yml.example group_vars/all/vars.yml"
+      stack_hint "cp group_vars/all/vault.yml.example group_vars/all/vault.yml"
+      stack_hint "ansible-vault encrypt group_vars/all/vault.yml"
+      stack_hint "ansible-playbook -i inventory/hosts.yml provision.yml   # first-run provision"
+    fi
+  fi
+}
+
+cmd_triage() {
+  local where=${1:-}; shift || true
+  case $where in
+    prod)
+      stack_preflight triage-prod || return 1
+      local action=${1:-summary}; shift || true
+      case $action in
+        summary|"")  stack_prod_ps; stack_prod_health ;;
+        ps)          stack_prod_ps ;;
+        logs)        stack_prod_logs "$@" ;;
+        psql)        stack_prod_psql_one "$@" ;;
+        tunnel)      stack_prod_tunnel "$@" ;;
+        health)      stack_prod_health ;;
+        disk)        stack_prod_disk ;;
+        deploy)      stack_prod_deploy_status ;;
+        *)
+          stack_fail "unknown prod triage action: $action" \
+                     "Supported:  summary | ps | logs | psql | tunnel | health | disk | deploy"
+          return 1
+          ;;
+      esac
+      ;;
+    cloud)
+      stack_preflight kit || return 1
+      stack_warn "Cloud triage is fully wired through /infra-cloud-triage in the agent — use the skill directly for the full ladder."
+      stack_info "Quick checks below; for the full triage walk, open the skill."
+      stack_have vercel  && vercel ls 2>/dev/null || stack_hint "vercel CLI not installed; run /infra-cloud-triage for the install path."
+      stack_have neonctl && neonctl projects list 2>/dev/null || stack_hint "neonctl not installed; same as above."
+      ;;
+    "")
+      stack_fail "\`stack triage\` requires a target (prod or cloud)." \
+                 "Examples:  stack triage prod logs   |   stack triage cloud"
+      return 1
+      ;;
+    *)
+      stack_fail "unknown triage target: $where" \
+                 "Supported:  prod  (VPS-deployed projects)  |  cloud  (Vercel + Neon)"
+      return 1
+      ;;
+  esac
+}
+
+# -----------------------------------------------------------------------------
+# Dispatch
+# -----------------------------------------------------------------------------
+
+# Lazy GC of expired sandboxes — runs on every stack invocation, silent when
+# there's nothing to reap. Skipped for help/doctor so they stay snappy.
+case "$CMD" in
+  ""|-h|--help|help|doctor|bootstrap) : ;;
+  *) stack_sandbox_gc 2>/dev/null || true ;;
+esac
+
+case "$CMD" in
+  ""|-h|--help|help)  cmd_help ;;
+  up)                 cmd_up "$@" ;;
+  down)               cmd_down "$@" ;;
+  restart)            cmd_restart "$@" ;;
+  reset)              cmd_reset ;;
+  ps)                 cmd_ps ;;
+  ports)              cmd_ports ;;
+  doctor)             cmd_doctor "$@" ;;
+  logs)               cmd_logs "$@" ;;
+  psql)               cmd_psql "$@" ;;
+  exec)               cmd_exec "$@" ;;
+  seed)               cmd_seed "$@" ;;
+  dashboard)          cmd_dashboard "$@" ;;
+  tunnel)             cmd_tunnel "$@" ;;
+  tls)                cmd_tls "$@" ;;
+  lifecycle)          cmd_lifecycle "$@" ;;
+  install-shell)      cmd_install_shell "$@" ;;
+  sandbox)            cmd_sandbox "$@" ;;
+  bootstrap)          cmd_bootstrap "$@" ;;
+  triage)             cmd_triage "$@" ;;
+  *)
+    stack_fail "unknown command: $CMD" \
+               "Run  stack help  to see all commands."
+    exit 1
+    ;;
+esac

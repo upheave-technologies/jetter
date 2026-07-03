@@ -1,0 +1,58 @@
+# =============================================================================
+# Template — VPS production compose for __APP_NAME__
+# Rendered by `stack bootstrap render --profile vps` — do not edit directly.
+# =============================================================================
+# Three services: caddy (TLS termination) + app + postgres.
+# Postgres is bound to 127.0.0.1 only so you can SSH-tunnel from a local DB
+# GUI without exposing Postgres to the internet.
+# =============================================================================
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - __APP_SERVICE__
+    restart: unless-stopped
+
+  __APP_SERVICE__:
+    image: ghcr.io/__GH_ORG__/__APP_SLUG__/__APP_SERVICE__:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://__APP_SLUG__:${POSTGRES_PASSWORD}@postgres:5432/__APP_SLUG__
+      NODE_ENV: production
+      # Add your app-specific env vars below as `KEY: ${KEY:-}` (use `${KEY}` if required).
+      # EXAMPLE_VAR: ${EXAMPLE_VAR:-}
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    # Bound to VPS loopback only — lets you SSH-tunnel from a local DB GUI
+    # (DBeaver / TablePlus / psql) without exposing Postgres to the internet.
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: __APP_SLUG__
+      POSTGRES_USER: __APP_SLUG__
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U __APP_SLUG__"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,109 @@
+# =============================================================================
+# Nucleus Stack Kit — Manifest for `jet`
+# =============================================================================
+# Project shape: two services — the Next.js app (`board`) and PostgreSQL
+# (`postgres`, image postgres:16-alpine, data in a named `pgdata` volume). The
+# board reaches the DB over the compose network via DATABASE_URL. No Redis, no
+# Caddy/proxy. Local dev runs Postgres in Docker; PRODUCTION runs Neon
+# (serverless Postgres) against the same DATABASE_URL contract — the deploy
+# target is cloud (Vercel + Neon), not VPS.
+#
+# Storage migration (the SQLite→Postgres change-unit): the module moved off
+# better-sqlite3 (a bind-mounted ./data/board.db file, lazy CREATE TABLE
+# bootstrap) onto PostgreSQL via the node-postgres `pg` driver + real
+# drizzle-kit migrations. The ./data bind mount and BOOKINGS_DB_PATH are gone.
+#
+# Hand-written (not rendered by /infra-bootstrap) because jet's reality
+# diverges from the template's Postgres+Caddy default. Keep this file
+# truthful: every key here describes something that actually exists in the
+# project tree. If a field's default in lib/_common.sh is good enough, omit
+# it from this manifest rather than parroting a wrong value.
+# =============================================================================
+
+kit:
+  version: "0.1.0"
+  installed_at: "2026-06-08T00:00:00Z"
+  source: "upheave-technologies/nucleus@infra"
+
+project:
+  slug: "jet"
+  name: "jet"
+  app: "."                           # Next.js app lives at repo root, not under apps/<x>
+  package: "jet"
+  domain_dev: "jet.loc"
+  # No domain_prod — local-dev only.
+
+deploy_target: cloud                 # Vercel (app) + Neon (Postgres). Not VPS.
+
+default_profile: full                # only one profile exists; `full` == the dev stack
+
+# Only `full` is configured. minimal/prod/cloud intentionally omitted so doctor
+# logs "not configured (skipping)" warnings rather than failing — those
+# profiles do not exist in this project.
+compose:
+  full: infra/docker-compose.dev.yml
+
+services:
+  app: board                         # the Next.js service in the compose file
+  db: postgres                       # the PostgreSQL service in the compose file
+  # No proxy service — local dev reaches the board over plain HTTP on loopback.
+
+# Postgres connection facts for the kit's psql/db helpers. `stack psql` execs
+# into the `postgres` service. These are the LOCAL-DEV credentials (throwaway,
+# not secrets); production points at Neon via DATABASE_URL in the deploy env.
+db:
+  service: postgres
+  user: jet
+  password: jet
+  name: jet
+  container_port: 5432               # the host port is allocator-assigned (STACK_PORT_DB)
+
+# Port ranges. `app` and `db` are both meaningful now — the allocator gives
+# each worktree its own host ports for the board and Postgres (kept in
+# ~/.stack/port-registry.json + infra/.ports). proxy range kept at kit default.
+ports:
+  app:         { base: 4000, range: 500 }
+
+env_files:
+  # jet has no infra/.env or apps/<x>/.env.local today. Pointing host at the
+  # repo root so any future `.env.local` lands in the conventional spot.
+  compose: infra/.env
+  compose_example: infra/.env.example
+  host: ".env.local"
+  host_example: ".env.local.example"
+
+# No vps: block — not deployed via Ansible.
+# cloud: Vercel (app) + Neon (Postgres). Production DATABASE_URL is the Neon
+# pooled connection string (sslmode=require), set in the Vercel env — never in
+# git, never in infra/.env. See infra/README.md → "Production: Neon" and the
+# /infra-cloud-triage skill. Connection facts are deliberately NOT stored here
+# (they are secrets that live in the deploy platform).
+
+tunnel:
+  default: ngrok
+  target_hostname: "jet.loc"
+
+features:
+  portless: false
+  dashboard_auto_start: true
+  sandbox_max_concurrent: 10
+
+seeds_dir: infra/_kit/seeds
+
+# =============================================================================
+# Lifecycle hooks — declarative bootstrap recipe.
+# Steps in post_up run after `stack up`; pre_down before `stack down`.
+#
+# Deliberately EMPTY. Schema is now applied by real drizzle-kit migrations, but
+# they are a HOST step (`pnpm db:migrate`), NOT a container step: drizzle-kit is
+# a devDependency and is intentionally absent from the production board image
+# (see Dockerfile), so a post_up migrate hook that execs into the board
+# container would fail — the binary isn't there. The operator runs
+# `pnpm db:migrate` (then optionally `pnpm seed`) from the host after `stack up`,
+# with the host-facing DATABASE_URL exported from infra/.env. See
+# infra/README.md → Quick start. If migrations are ever moved into a dedicated
+# one-shot migrator service, wire that here as a post_up step.
+# =============================================================================
+lifecycle:
+  post_up: {}
+  pre_down: {}

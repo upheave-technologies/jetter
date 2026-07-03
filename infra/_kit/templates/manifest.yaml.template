@@ -1,0 +1,98 @@
+# =============================================================================
+# Nucleus Stack Kit — Manifest TEMPLATE
+# =============================================================================
+# /infra-bootstrap renders this template with the project's values substituted.
+# Placeholders use double-underscore form: __APP_NAME__, __APP_SLUG__, etc.
+# =============================================================================
+
+kit:
+  version: "0.1.0"
+  installed_at: "__INSTALLED_AT__"
+  source: "upheave-technologies/nucleus@infra"
+
+project:
+  slug: "__APP_SLUG__"
+  name: "__APP_NAME__"
+  app: "__APP_PATH__"                    # e.g. apps/core, apps/web, .
+  package: "__APP_PACKAGE__"             # e.g. @myproject/core
+  domain_dev: "__APP_SLUG__.loc"
+  domain_prod: "__DOMAIN_PROD__"
+
+deploy_target: __DEPLOY_TARGET__         # vps | cloud | hybrid
+
+default_profile: __DEFAULT_PROFILE__     # full | minimal | cloud
+
+compose:
+  minimal: infra/docker-compose.dev.yml
+  full:    infra/docker-compose.dev.yml
+  prod:    infra/docker-compose.vps.yml
+  cloud:   infra/docker-compose.dev.yml
+
+services:
+  app: __APP_SERVICE__                   # usually 'core' or 'web'
+  db: postgres
+  proxy: caddy
+
+db:
+  engine: postgres
+  user: "__APP_SLUG__"
+  database: "__APP_SLUG__"
+  default_password: "__APP_SLUG__"
+
+ports:
+  app:         { base: 4000, range: 500 }
+  db:          { base: 5500, range: 300 }
+  proxy_https: { base: 9000, range: 800 }
+  proxy_http:  { base: 8000, range: 800 }
+
+env_files:
+  compose: infra/.env
+  compose_example: infra/.env.example
+  host: "__APP_PATH__/.env.local"
+  host_example: "__APP_PATH__/.env.local.example"
+
+vps:
+  user: deploy
+  app_path: "/opt/__APP_SLUG__"
+  compose_file: "/opt/__APP_SLUG__/docker-compose.yml"
+  inventory: infra/ansible/inventory.yml
+  vault: infra/ansible/group_vars/all/vault.yml
+
+cloud:
+  vercel_project: null
+  vercel_org: null
+  neon_project_id: null
+
+tunnel:
+  default: ngrok
+  target_hostname: "__APP_SLUG__.loc"
+
+features:
+  portless: false
+  dashboard_auto_start: true
+  sandbox_max_concurrent: 10      # cap on concurrent sandboxes per project (stack sandbox)
+
+seeds_dir: infra/_kit/seeds
+
+# =============================================================================
+# Lifecycle hooks — declarative bootstrap recipe.
+# Steps run in declaration order inside the app container, after `stack up`
+# (post_up) or before `stack down` (pre_down). Each step's `exec:` is the
+# command; optional `workdir:`, `env:`, `on_failure:` (abort | continue),
+# `description:`. Skip the whole chain with `--no-hooks` on up/down.
+# See infra/AGENT_MANUAL.md §5.8.
+#
+# Idempotency is YOUR responsibility — every step should be safe to re-run.
+# =============================================================================
+lifecycle:
+  post_up:
+    # migrate:
+    #   description: Apply schema migrations
+    #   exec: npx drizzle-kit migrate     # or: prisma migrate deploy, knex migrate:latest, ...
+    #   workdir: /app/__APP_PATH__
+    # seed_baseline:
+    #   description: Reconcile reference data
+    #   exec: node scripts/seed.bundle.cjs
+    #   workdir: /app/__APP_PATH__
+    #   env: __APP_SLUG_UPPER__ENV=development
+  pre_down: {}

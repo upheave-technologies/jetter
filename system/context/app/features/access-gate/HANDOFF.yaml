@@ -1,0 +1,69 @@
+spec_version: 1
+route: app/login
+files:
+  page: app/login/page.tsx
+  actions: app/login/actions.ts
+  error: null
+  loading: null
+  not_found: null
+
+data_shape:
+  # LoginPage has no data props — it reads cookies server-side and either
+  # redirects (authed) or returns null (frankie fills the form JSX).
+  # No data variables are passed into the component tree from this page.
+
+slow_fetches:
+  # No slow fetches on the login page. Cookie read + SHA-256 derivation is
+  # sub-millisecond. No DB calls anywhere in this flow.
+
+cache_strategy:
+  segment:
+    dynamic: force-dynamic
+    revalidate: null
+  functions: []
+
+server_actions:
+  - name: loginAction
+    mutates: []
+    revalidates: []
+    redirects_to: "/"
+    success_shape: "ActionResult (void — redirect fires before return)"
+
+metadata:
+  strategy: null   # no metadata export on the login page; uses root layout defaults
+
+next_steps_for_frankie:
+  - Replace `return null` in app/login/page.tsx with a LoginView component
+  - Create app/login/_components/LoginView/ — a password form that binds
+    to loginAction from app/login/actions.ts via form action attribute
+  - Include a password input (name="password", type="password") and a submit button
+  - Surface two error states from loginAction ActionResult:
+      code === 'INVALID_PASSWORD'  — show "Pogrešna lozinka"
+      code === 'NOT_CONFIGURED'    — show "Sustav nije konfiguriran — kontaktirajte
+        administratora" with a note that APP_PASSWORD must be set
+  - The form should use useFormState (or React 19 useActionState) to capture the
+    returned ActionResult and display the error — this is a 'use client' container
+    (ephemeral error state after form submission)
+  - Login form is the only interactive surface; no other components needed
+  - Match the Croatian UI copy / colour tokens used by the board
+
+# Cross-cutting files modified by nexus (not route-scoped):
+cross_cutting_changes:
+  - path: lib/auth.ts
+    description: >
+      New app-level auth helper. Edge-safe (Web Crypto only). Exports:
+      AUTH_COOKIE constant, deriveToken, expectedToken, verifyCookieValue,
+      verifyPassword. Imported by middleware.ts and app/login/actions.ts.
+  - path: middleware.ts
+    description: >
+      New root middleware. Reads AUTH_COOKIE, calls verifyCookieValue; redirects
+      to /login when invalid. Matcher excludes /login and all static assets.
+  - path: app/page.tsx
+    description: >
+      Comment-only update: updated provenance comment to distinguish "no per-user
+      auth (DEC-P1, still true)" from "coarse app-wide gate in middleware.ts
+      (DEC-AG1)". No logic changed.
+  - path: app/actions.ts
+    description: >
+      Comment-only update: same provenance clarification as app/page.tsx.
+      No logic changed.

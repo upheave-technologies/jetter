@@ -1,0 +1,3 @@
+__DOMAIN_PROD__ {
+    reverse_proxy __APP_SERVICE__:4100
+}

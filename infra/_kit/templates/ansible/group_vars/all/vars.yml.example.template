@@ -1,0 +1,5 @@
+deploy_user: deploy
+domain: __DOMAIN_PROD__
+
+ssh_authorized_keys:
+  - "... your ssh public key"

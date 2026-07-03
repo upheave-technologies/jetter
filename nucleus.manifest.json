@@ -1,0 +1,742 @@
+{
+  "version": 1,
+  "initializedAt": "2026-06-05T22:07:50.040Z",
+  "registrySource": "upheave-technologies/nucleus",
+  "preset": "standard",
+  "nucleusVersion": "0.10.1",
+  "blocks": {
+    "architecture": {
+      "name": "architecture",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:07:50.869Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/architecture.md": "3917b0bb1baa7a8878be89b0a249487b2e00a20d7d9fd942a9bb72f714879d77"
+      },
+      "compositeHash": "0ee0ce93c0877cf7d0eff1e9c72da5e7d6f1427daee3f3999197134f524b156c"
+    },
+    "project-structure": {
+      "name": "project-structure",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:07:51.098Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/project-structure.md": "c59f30c70d8d842376af79a17305c82c02d8da5d3e3b198ecfcf1f7f29f06da2"
+      },
+      "compositeHash": "6dcdc0176935196c28dc20e2257f9c93669696d56bf83a81e11127cf8c0351e0"
+    },
+    "archie-rules": {
+      "name": "archie-rules",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:07:51.423Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/archie-rules.md": "74249db85bcb5a3be7e9c49d516f7ee6adb6634d3e1ee2ae574ddd59f1c8c214"
+      },
+      "compositeHash": "42a06cc8c30e9ad0a09910fc763cb9d972fcc6c860ee984ff3f8b09a5de52c6d"
+    },
+    "archie": {
+      "name": "archie",
+      "category": "agent",
+      "installedAt": "2026-06-05T22:07:51.876Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/agents/archie.md": "d3099b97dede54e69445d422567d6086f829527fb65c0623bb6b5f8c3f9feef2"
+      },
+      "compositeHash": "79812e25213f24ec767672094eedd0a5e0ec3340c04ab061a1d0c554af12556a"
+    },
+    "ddd-architecture": {
+      "name": "ddd-architecture",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:07:52.161Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/ddd-architecture.md": "6dae977bdc4ba6b9e000450989eafcd2ea49c16ea5cb1b67f455c6eec35137b5"
+      },
+      "compositeHash": "13091b82f0ec2e2caa545d0d1655a0ed4a0aac144abf2b0c136fe3da963318b2"
+    },
+    "architecture-guard": {
+      "name": "architecture-guard",
+      "category": "hook",
+      "installedAt": "2026-06-05T22:07:52.886Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/hooks/architecture-guard.sh": "3885c783f6911f0c3a69b09f2d7a8a1d316d92e4c8ce05a8529d839f9014a815"
+      },
+      "compositeHash": "a04549ae2c1a0fc6525acb105ca4ba707ad260069c7246edc0c2b90a0ff70796"
+    },
+    "donnie-rules": {
+      "name": "donnie-rules",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:07:53.298Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/donnie-rules.md": "a3291899d24b47c7e5fee8e997190d4b3b7e3c4e4a03933486e99ebd9a964e74"
+      },
+      "compositeHash": "d51aaf98e12e75e25121a60eb5099bb3ace771e9d82025a1976a662369273f0c"
+    },
+    "donnie": {
+      "name": "donnie",
+      "category": "agent",
+      "installedAt": "2026-06-05T22:07:53.649Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/agents/donnie.md": "bc8d0263f1ce77adb7cbffd1c7842aecf1019d4760c50ece6ba2b65a281b25e5"
+      },
+      "compositeHash": "9a4f8eb102d4c689e3b2435eef22f111ec2980074438da175f1b89825bea6231"
+    },
+    "page-architecture": {
+      "name": "page-architecture",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:07:53.873Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/page-architecture.md": "09056f14fbccb89e43f47d1a16fd50201ea43daa8a79144909cc3c749646dd64"
+      },
+      "compositeHash": "4969b5b2c7c38dd1d49585917057a1f3c99379b5dc4642de1e19a031bac61beb"
+    },
+    "server-actions": {
+      "name": "server-actions",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:07:54.227Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/server-actions.md": "3ee70ebedd5c08d5507200ca0016c3af854e59abb2f845236e2001276f0333d9"
+      },
+      "compositeHash": "1824712e19028ac4a48a7a947141108f0691ad1e578fc35620fe162144427ccc"
+    },
+    "react-components": {
+      "name": "react-components",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:07:54.586Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/react-components.md": "c7ac6976de8def35d2e62f78770b92c32c75c2685d8fbad2e32df62a86504fc8"
+      },
+      "compositeHash": "62c21d154c6b197abb811f4093b8c441bb967651209b73c6aa2d75f3a97cc349"
+    },
+    "server-first-react": {
+      "name": "server-first-react",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:07:54.889Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/server-first-react.md": "72cd0c274745d3c98bdd9a68cc8faa9308c32b1d59cb96dfa2cdd3635b1929fe"
+      },
+      "compositeHash": "7b8a84d80645afd0a95e2d9455a3517bf009c164ebd9c457455f02860e79977b"
+    },
+    "nexus-rules": {
+      "name": "nexus-rules",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:07:55.277Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/nexus-rules.md": "0c9ce644e100b1a13d191d62bba23049a2e5151c0a581cebe0352bd4a07040e6"
+      },
+      "compositeHash": "fb4bb363ed79f634f792adc602097a6fade25090e3841db4f15cbf28aa38a93f"
+    },
+    "nexus": {
+      "name": "nexus",
+      "category": "agent",
+      "installedAt": "2026-06-05T22:07:55.808Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/agents/nexus.md": "9a0270e46cd1b36ffa5843cf9259d42fed318cee5f3ab7a626de0c4a189d5e08"
+      },
+      "compositeHash": "40208939aec507f602b9a9e7d959ea89f2c82f1774cb9dddfb9bc50cf818db3a"
+    },
+    "frankie-scope-guard": {
+      "name": "frankie-scope-guard",
+      "category": "hook",
+      "installedAt": "2026-06-05T22:07:56.171Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/hooks/frankie-scope-guard.sh": "0160352a93d929eac57fb74ccb60bb835fda55d17b0b3aabcdf93795c8ee03c8"
+      },
+      "compositeHash": "17dc5ead2f1f3a0233c5daf7b34b5d7c99ff92162803464499266fc42aa6db1e"
+    },
+    "frontend-guideline": {
+      "name": "frontend-guideline",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:07:56.490Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/frontend-guideline/SKILL.sh": "e4f7f22f1372366874c1f4da15e4df3371ce6466648cd3c3df7d72ba75608a63"
+      },
+      "compositeHash": "27cc5327642b4bf6efc42bfb42d542b26696e4fd2fca5abb42758fc8674227c5"
+    },
+    "frankie-rules": {
+      "name": "frankie-rules",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:07:56.825Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/frankie-rules.md": "24595e84d8d1c0683ab2e013d938309139aaf014bc6bddc46226958d7a4a4ff1"
+      },
+      "compositeHash": "561fe6817881170439c5703297b6db24bfbd592a8d21775b655d518c424e6513"
+    },
+    "frankie": {
+      "name": "frankie",
+      "category": "agent",
+      "installedAt": "2026-06-05T22:07:57.204Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/agents/frankie.md": "afc45d91a9e7ea8815bae7e2313294f991f6841c0f32b6503d19a72779b2faac"
+      },
+      "compositeHash": "845016efc5ea9310bc3bbf565ad41801999e981d6512a75da63160258a08d1c5"
+    },
+    "skill-spec": {
+      "name": "skill-spec",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:07:57.690Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/spec/SKILL.md": "0cfb946c9b18615bd853c6b72235c57ae50f3715bcfd8f58fc3bf0022d435b49",
+        ".claude/skills/spec/spec-template.md": "1534e4b2d24a650d8ba73be18d0a22d676de62b262955078fda9c22e24785c9b"
+      },
+      "compositeHash": "5cf8cd776c92b2dd38854e030d167abb8de1412fb1780259fd03d18cbecf402c"
+    },
+    "spec": {
+      "name": "spec",
+      "category": "agent",
+      "installedAt": "2026-06-05T22:07:58.020Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/agents/spec.md": "850cb9562aefe77a1e9a0c92931f97b89e64ab133b53d6350e33a2962bec8c93"
+      },
+      "compositeHash": "962b2ccdd529460b8e3e6de157feb1078c2261ac47ea0476b85c7ea455a0efef"
+    },
+    "auditor-trigger": {
+      "name": "auditor-trigger",
+      "category": "hook",
+      "installedAt": "2026-06-05T22:07:58.324Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/hooks/auditor-trigger.sh": "50ea936102d5fe189ae0f7067b2c541a918d22ac11a244a460efa7146028412f"
+      },
+      "compositeHash": "7195332b9f595ed2db7f66b118cedcb34417008276352985cf0e7a3bce066398"
+    },
+    "auditor": {
+      "name": "auditor",
+      "category": "agent",
+      "installedAt": "2026-06-05T22:07:58.687Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/agents/auditor.md": "a885220a0e995f3f1b5f562005fd48602f275c0de394e4e1f0d12e6467f817ee"
+      },
+      "compositeHash": "e27e8ca6df1290850256cd9ec1966003e75d8241319bb9541a88335055f061c9"
+    },
+    "ddd-patterns": {
+      "name": "ddd-patterns",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:07:59.066Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/ddd-patterns/SKILL.md": "58c24d0e1648fde53971c14593b126ce953a3984a7e8a3e47070a9d0637aa206"
+      },
+      "compositeHash": "26a627a9fb821c1ee0a86cd78a1fa8be407d5db1492be5caf1af1da792dad981"
+    },
+    "prover": {
+      "name": "prover",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:07:59.562Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/prover/SKILL.md": "44c3f593dde7b2c1b8d9355a449a1c8e0322b29b23df85d9e1334b6b6ea5c14a"
+      },
+      "compositeHash": "6aaf6e697c06155a08f93295c16bc561f8b37b1d93e9721b337bc8a7917c394c"
+    },
+    "changelog": {
+      "name": "changelog",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:07:59.845Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/changelog/SKILL.md": "9335724fc4d3616a3792b11436d31bf05e1c9826124a254514ca0070b58ceac8"
+      },
+      "compositeHash": "e6e5dc6477477d04fd2e8860ced2c959636db3a886471447d1d741699d027c29"
+    },
+    "skill-verify": {
+      "name": "skill-verify",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:08:00.099Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/verify/SKILL.md": "2e833415b72caf1dbf2d3581c9a65d5f28f71fd947a43bf9bb7b83d1358db0be"
+      },
+      "compositeHash": "ab61d1e86b01103f559e2044f0527f7f18fdc7b4b3af9e4ac14c60b01c511692"
+    },
+    "build-check": {
+      "name": "build-check",
+      "category": "hook",
+      "installedAt": "2026-06-05T22:08:00.372Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/hooks/build-check.sh": "aa2a1fc56629707bede49279cbd00747b4bf2a9e1a11ed829ee9545ec1750b5b"
+      },
+      "compositeHash": "3afaf734fd97e522b10e5ec3c4ddaeaa269b68ea3b3655af1d92b28da0e22732"
+    },
+    "nucleus-guard": {
+      "name": "nucleus-guard",
+      "category": "hook",
+      "installedAt": "2026-06-05T22:08:00.708Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/hooks/nucleus-guard.sh": "67419d26d487b774de5e880c2296778251d0a39f20e6ecb6c3a6ac65570c67d1"
+      },
+      "compositeHash": "81cf9822b57cd5cefbd1022fe9bd84cf5840f5d2d57b472a1d549d1d1e665c4b"
+    },
+    "orchestrator-guard": {
+      "name": "orchestrator-guard",
+      "category": "hook",
+      "installedAt": "2026-06-05T22:08:00.938Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/hooks/orchestrator-guard.sh": "0a6eb7094764e7cfe830946130115b2eeff94e55df21e7e4725fc6b93585b274"
+      },
+      "compositeHash": "413b8664ead79e61eb2ec645777e26e7cac02c3917354e3261ff313e872b6484"
+    },
+    "nucleus-readonly": {
+      "name": "nucleus-readonly",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:08:01.207Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/nucleus-readonly.md": "9ea006ad00adce8e60a3ba08a9113d9c5222b1fe22ae061fe854457a3bad0d9c"
+      },
+      "compositeHash": "b2b3f94d78d663bfc2390faa69a263d17dfa6bed0a4e97b81dc246cb5460cbb0"
+    },
+    "shared": {
+      "name": "shared",
+      "category": "package",
+      "installedAt": "2026-06-05T22:08:04.059Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        "packages/shared/AGENT.md": "2f3619bc0e41bcff50c3fbf8e8f82bbd2b274cea095701e15b8c9e6f6f52bb55",
+        "packages/shared/OVERVIEW.md": "fc6d71480ae4c0bd954f30fdb2c4dff89803202bd167d2eb6ae1c63d9553bb3a",
+        "packages/shared/USAGE.md": "2cf814287b216d3f466411362a394cdb899bb63f50b9ce3da374f554bb5e38a6",
+        "packages/shared/lib/capability.ts": "54dfd5f200dca5e7960b820e3ea59950fa20c83325fe48dad54b0324e41b4015",
+        "packages/shared/lib/result.ts": "6bab5e90bcec47a691a2396d61f54d564756c878271120073382f31fb2dedb2d"
+      },
+      "compositeHash": "bafba83e04029c7a4a5f64b7a48aadb116b1c44573547091cf54078f2bce9ede"
+    },
+    "identity": {
+      "name": "identity",
+      "category": "package",
+      "installedAt": "2026-06-05T22:08:12.615Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        "packages/@core/identity/AGENT.md": "ee257cf34811da9da8d3634bbddf9204d9ae3e1852f4602d1e009e8d2ddedc70",
+        "packages/@core/identity/CONNECTIONS.md": "f7a40a99344b76c3680ded5eb9dde59eb660c300a8708b2db1d9b359510a0620",
+        "packages/@core/identity/OVERVIEW.md": "188c8e91f64f15b1740b794f75eb93f23664c279631c9065c0741ab40209d1f1",
+        "packages/@core/identity/USAGE.md": "81dc9d8b19fbe986e338fcaa43a8f4ca49de54cd0821d2fd66a2a8f151243914",
+        "packages/@core/identity/application/createPrincipalUseCase.ts": "b4348edd8449ecabf65cf4e4a915baf2e24c0e4da2ce0416a24db4e73cd7c28f",
+        "packages/@core/identity/application/deactivatePrincipalUseCase.ts": "318f923ca0e6074151657718c0188eb0425d2a204d7872e1865aff0250c52e76",
+        "packages/@core/identity/application/getPrincipalByEmailUseCase.ts": "38bed9189decbf4c089abd49cef31474289139e9ae0f2a40bb7b86601d03f3a6",
+        "packages/@core/identity/application/getPrincipalUseCase.ts": "408b499751bf3fe0c7349bd81148efa98740cecc8d2401d4342b783bab631c76",
+        "packages/@core/identity/application/identityError.ts": "19126c8d908f38d316682a5c779f7cb241a35e1b93359ff19935f3a122ffa47c",
+        "packages/@core/identity/application/listPrincipalsUseCase.ts": "bf1b06d11273641d90f3ad3ea999808eb80eed3e3c8bd6c7e35767192e212c0d",
+        "packages/@core/identity/application/reactivatePrincipalUseCase.ts": "dfa9d2705bdcf60dd13d3ea75b540e2372c18888ac58d28f8060bc5a8bb0b4f1",
+        "packages/@core/identity/application/suspendPrincipalUseCase.ts": "e8d8aa81baf6e0fdc7a52d9600c452d87d19568a1e5d491dd48b697fabe5a134",
+        "packages/@core/identity/application/updatePrincipalUseCase.ts": "1ca384513b922f3a7a1373ec46899f52519c780ff6be2a007da79a2f6ea070ff",
+        "packages/@core/identity/capabilities.yml": "74388e474369b175ee4b04d12ee718da7da51db61fd9e08b3e05267e03592d34",
+        "packages/@core/identity/domain/principal.ts": "95eb13ada2c872d283232915a94cca6ec4a666fc2147aabd22723e05546b504e",
+        "packages/@core/identity/domain/principalRepository.ts": "a9129297d235371d4fb1562585cd5698917e45d079d9f0edcf24e1a26103ef01",
+        "packages/@core/identity/index.ts": "a2bdd73333a7f70b5238b12472ed778aa23907fc4fb3547f3dcba63a0f320099",
+        "packages/@core/identity/infrastructure/database.ts": "1f4a128e49dc6b725f9c8b4c60780cc67c14ebe59e1d62ce3bbab897f0d8fc6d",
+        "packages/@core/identity/infrastructure/repositories/DrizzlePrincipalRepository.ts": "618331c2053e05ec3760e5ec8f32d3397da1b3f13c61a0c9bc25b3645f3da3e2",
+        "packages/@core/identity/schema/enums.ts": "5d21436b8692d9762bd64d5bb70f4abe677feb374cb458a6d52507168534fa34",
+        "packages/@core/identity/schema/index.ts": "ae94698dc2f4119d5c08113ec29eaae196c3a1ed234a0f4b1d828066eedb97ec",
+        "packages/@core/identity/schema/principals.ts": "45c37e86c9a159dca4c4324ec012ca1454722fd08fbc38ce0b4cacd19c058d8e",
+        "packages/@core/identity/schema/relations.ts": "04722b9d9aff10f6201ad6b98c3402d0f111148d2d46313be491f9f663dfb4df"
+      },
+      "compositeHash": "3397a5e67427bd451623e5c3e078865de68be892a828e112ad7211c231440fb2"
+    },
+    "auth": {
+      "name": "auth",
+      "category": "package",
+      "installedAt": "2026-06-05T22:08:21.975Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        "packages/@core/auth/AGENT.md": "00b561db6c3662bf1c03bb1dd52fa606202a0dd6d9bcb48edf9f782a603fc2fa",
+        "packages/@core/auth/CONNECTIONS.md": "4ba60d10dcebabffd316d80c5a301fd3060657e051ba8a55ddf213ce3e90545b",
+        "packages/@core/auth/OVERVIEW.md": "249f9c9481fe408f1f0d13589f1610918242bfc9af743121f9b9183a842582c5",
+        "packages/@core/auth/USAGE.md": "029c9bf4d3acdc667b1ba7aa4f210d8bf77225a3cc64195458ebcc832dfae6eb",
+        "packages/@core/auth/application/authError.ts": "da0f71294c264e43f62f388fbbe1ea35757a484b5f1e130c7d2882f38be1ac88",
+        "packages/@core/auth/application/changePasswordUseCase.ts": "4f64c2557b9781bbcd08cc9bade11d4572f69694fbb7506f9404f5db3aa651ad",
+        "packages/@core/auth/application/createApiKeyUseCase.ts": "fff19fe5c88857aafaca09690af90c32814f0354f028cd8c6790f41558e558ef",
+        "packages/@core/auth/application/createPasswordCredentialUseCase.ts": "b0b941b6de1a3d05f7f29b7cbeeb661a2ec761b4d673ad9426851dd5e6a7e070",
+        "packages/@core/auth/application/hasActiveCredentialUseCase.ts": "355ae6fb7ce45d3633138ecaba0d800f1d46fb1832ca81ce43881b15ab7da2b8",
+        "packages/@core/auth/application/linkOAuthProviderUseCase.ts": "c2644790516e5a55a09628132ee6cfa378662ea68564760bc127173f5d0afa17",
+        "packages/@core/auth/application/revokeAllCredentialsUseCase.ts": "641513986d768a57c0ad9abd08375264caebdb8a0508eceb9eed76a6ff0b23d3",
+        "packages/@core/auth/application/revokeCredentialUseCase.ts": "887e82d60d9e12b18ffc072b6241e001ec6d383a0ad3da87297f2a064a4d0f71",
+        "packages/@core/auth/application/verifyApiKeyUseCase.ts": "a860305590a767a9e5989f1bb58c416e9b1286191b66080496075c02121c043a",
+        "packages/@core/auth/application/verifyOAuthProviderUseCase.ts": "356bcf32b061f75fb6a5f36168e10d92a666fccf022badd14e52e5535aa31de4",
+        "packages/@core/auth/application/verifyPasswordUseCase.ts": "c40e6a6f228276d12257e81d1cccc767072252610caa11d5b0868ef4748068ce",
+        "packages/@core/auth/capabilities.yml": "d370e70041592af0dd2d416203238cee94ab4ef87846da19fc172a68450e2516",
+        "packages/@core/auth/domain/credential.ts": "3e77e26cae2aeea4387a0412d661b7a730732b85f581767736c34cd1f62a0699",
+        "packages/@core/auth/domain/credentialRepository.ts": "b7bea2b763254fa98d6afd2390e11587ff44112185b0a1a432ba7cc2c765ac8d",
+        "packages/@core/auth/index.ts": "13b17019d7b1a568115555f25b0e51527e332782c1f42803954926d9866974e7",
+        "packages/@core/auth/infrastructure/database.ts": "75f4dd280652e31f69c5dfc5c697435a7aaa8bbf72323bd69e9674e18f4fb26c",
+        "packages/@core/auth/infrastructure/hashingService.ts": "badbeedea422251e28ac04fb6326c949eefcbb5c6691368a5af5ad62b5420b32",
+        "packages/@core/auth/infrastructure/repositories/DrizzleCredentialRepository.ts": "b74eb4fcf6319660eb757fc2177e043ec6cdc2aa92d7002432fed5fce9731638",
+        "packages/@core/auth/schema/credentials.ts": "f2ba1b958bb7db291e421c7b92b6d8d069b188bf75fdd4ca20c367f7ce17c237",
+        "packages/@core/auth/schema/enums.ts": "12250d2caa491a9de13535888ce4f7a875203e89a5d2bbad68bf485221610746",
+        "packages/@core/auth/schema/index.ts": "9fa0e705af9e7bd9f88230bb0705a37064e5468e69a1a6e1c0599ab8dfcad691",
+        "packages/@core/auth/schema/relations.ts": "c41c56d4edc5ea75a7117f93429683f04b962864e2ba7230331da2f05a880564"
+      },
+      "compositeHash": "49d1dd5550119cb073146c3baf333abb04437f617c2032f85d4ecaac302661bd"
+    },
+    "iam": {
+      "name": "iam",
+      "category": "package",
+      "installedAt": "2026-06-05T22:08:32.388Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        "packages/@core/iam/AGENT.md": "305fdbd4874ffe244a9d108491f79f3bfdecb8fb3c48217734e15de8caa88285",
+        "packages/@core/iam/CONNECTIONS.md": "97fd508e0f17ad182801c15b71015febeb9edafa48dcade0a73402672568e889",
+        "packages/@core/iam/OVERVIEW.md": "02099c9616f33c2dddd88509c6fc80fba57ea24135cf69517a83bc20b1cbae6a",
+        "packages/@core/iam/USAGE.md": "1e5f8d0c28aeda17dc5a8c0fd2db3133d365293b87ab82037a212edf6f506980",
+        "packages/@core/iam/application/accessError.ts": "d53dfd6c4296082775cdc74ea6e77884f481c7bbbda8c2101783f4dff1bda1ce",
+        "packages/@core/iam/application/buildPrincipalAbilityUseCase.ts": "72e5be515a2a087b475c35e0dded5e8360ad217eb36f716303f3e7b6552e9b40",
+        "packages/@core/iam/application/createPolicyUseCase.ts": "319ffdb595afc456f83b2a6ebc66bfedf03b2581bc32088183a792306290191d",
+        "packages/@core/iam/application/evaluateAccessUseCase.ts": "12343e5ba39c60ffa865a3d72622579c6b6488f33ef352447c651b93dad3be4f",
+        "packages/@core/iam/application/grantEntitlementUseCase.ts": "b08383b872e4a92e0b5b23dc9c1c3c904e56e633fa7ca7a35dc8a7bd3fa9497e",
+        "packages/@core/iam/application/resolvePrincipalPermissionsUseCase.ts": "466a3611be8f003536e2db3a860d476eef351b92ce49f0127684112e06381636",
+        "packages/@core/iam/application/revokeEntitlementUseCase.ts": "00cb5d6a16cc73a8fa870b3edb0ec2f9e750571c4e27e0f15586ac0a82e02b6c",
+        "packages/@core/iam/application/updatePolicyActionsUseCase.ts": "78465e2630bab8d69296adf9b84eb72f359e38695fe294e22b1aa0cc56ce6232",
+        "packages/@core/iam/capabilities.yml": "b1b05a508aa6c611844f44a7505646b47ffa01099fe08b683bb0c04386c17415",
+        "packages/@core/iam/domain/action.ts": "5f6a50bacbac752a3de3d8268e3300a1b4d317f4d917d0b954a8e759337372de",
+        "packages/@core/iam/domain/entitlement.ts": "a13f27ad5f34930132abbee9cd2712b1c13147f5118a337c78657cafa28d7834",
+        "packages/@core/iam/domain/entitlementRepository.ts": "6ccf8e7672ee321447284e4b2df2704e749a1d87f99d1df18ef3c4ab0d98f975",
+        "packages/@core/iam/domain/policy.ts": "8dc2573b067e33c4a9f4aadb615140e11bc3bd5796e1e8f1993bd0476bbf1f73",
+        "packages/@core/iam/domain/policyRepository.ts": "787ce8146d5f64223673011ae2eba4ed60dcacef962abfc786c5b30864ea0f43",
+        "packages/@core/iam/drizzle.config.example.ts": "dcf74c6f7fb4daf02c4466f3c97fe064d554971b065a069079e1b4e5ca4295fe",
+        "packages/@core/iam/index.ts": "6978df838d770b955796184e821a93544ca6454c86473622f691a06ad3be86bd",
+        "packages/@core/iam/infrastructure/CASLAbilityFactory.ts": "8fb4a4c1b0fcc7b8491faa1f8be6fd2ee195bebc576e0d894e424069c31d49bd",
+        "packages/@core/iam/infrastructure/database.ts": "025497b2618f89131aee7afc2b54dfc04b103cb83b441f548c59aa62b75f10ba",
+        "packages/@core/iam/infrastructure/repositories/DrizzleEntitlementRepository.ts": "2921098c6ec10a4eeab7b3096487c739442817ad446ec15a3d2a4181b520fdf5",
+        "packages/@core/iam/infrastructure/repositories/DrizzlePolicyRepository.ts": "769d09381d3112a43c24c662eec93bd3a48d1e306ae22bc94daf258a4de667ef",
+        "packages/@core/iam/schema/entitlements.ts": "a21fde2207b3bcf97864cdfe61fae87514c3ca9439abd7f1e8944bb66eab07ed",
+        "packages/@core/iam/schema/enums.ts": "0a73250a606f4653afeedec08f4b1dee0f34b0155d992a362d8c1c03ba2824ce",
+        "packages/@core/iam/schema/index.ts": "1c94071a5ef8d5662c51b6e174badef7b2821fa924068ab8e33a91d37968aeb0",
+        "packages/@core/iam/schema/policies.ts": "ac38eacd0827633ea4e701ecaf625fbbc4143c578a93fb329c4e69e99267545c",
+        "packages/@core/iam/schema/relations.ts": "22029d11b9d2613bb1047b0b0cdfed2f2b450e348cea89d087dd2818e5cf6947"
+      },
+      "compositeHash": "30722685d0106904ba0ae0a111f0fc349449049f1b243ad6c5da56c17f8478cf"
+    },
+    "dispatch": {
+      "name": "dispatch",
+      "category": "package",
+      "installedAt": "2026-06-05T22:08:47.182Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        "packages/@core/dispatch/AGENT.md": "ac23dcb6ed537ef8ee9f698c3314abd444e9ce26e1c7246e552f3bef8bc45c01",
+        "packages/@core/dispatch/CONNECTIONS.md": "7bd4b554c5afd94d3ff4783bd95ed3cffcdd6899c6c098be1833268db96c3c3c",
+        "packages/@core/dispatch/OVERVIEW.md": "bbb001368996e4bc857fa6f2c5d12da8c2f9cdd8436963be060fc80ebd019d45",
+        "packages/@core/dispatch/USAGE.md": "969fbf2b6106e3e686a1bb0e72eebf425be06d393ca6896092bab15081223713",
+        "packages/@core/dispatch/application/closeThreadUseCase.ts": "d50d77909b45024acd18917b5c5bddecae970a2dfdb3c715e8741cf3e90d73d1",
+        "packages/@core/dispatch/application/dispatchError.ts": "91f420df7d58e928de43e0733f06c97dab942d86a3cc4acfa2b28dc39e9d61a5",
+        "packages/@core/dispatch/application/enqueueOutboundUseCase.ts": "13dc02e2778ef3c168009705ac6980b95b048a7d7293070ba72a5bcbe577cf83",
+        "packages/@core/dispatch/application/getMessageStatusUseCase.ts": "405d3d4313850c99e2533afb7fa0f148c1d753446f02bb3baf31f7eff3b0bdb4",
+        "packages/@core/dispatch/application/getThreadUseCase.ts": "2b3d9c90c80f06d4556a351fa1a37991d05ebb9aa062ef3f01428d7da9efcd59",
+        "packages/@core/dispatch/application/processInboundBatchUseCase.ts": "f64b1f0668c4b45bbf5133e212b7a4994a5e0d90c689d09484d4faf6c7e291b5",
+        "packages/@core/dispatch/application/processInboundUseCase.ts": "6befa5fc51ff9562d1f9c2d90b3e79b59537c5e008e009ce669a0543697771ba",
+        "packages/@core/dispatch/application/processOutboundBatchUseCase.ts": "5a1d3241ba56112f6e2918c79f67cf524e9f7a90c3f6af15036d1fca82626dac",
+        "packages/@core/dispatch/application/receiveInboundUseCase.ts": "a4fc171ecf83254a0387689c4fc25695b1381ab9a9e1de89d7a4bd5c12cb464a",
+        "packages/@core/dispatch/application/retryFailedMessageUseCase.ts": "f4230d2be5c8677dc5280f89348c1500078cf3fce1a77f82063500782cbaca7e",
+        "packages/@core/dispatch/application/sendReplyUseCase.ts": "e92014ef455e7be62d4d76c99044d413c188d33fc69ef6a58fecb540ff157fa6",
+        "packages/@core/dispatch/capabilities.yml": "81aaf029d58afafa02b39b2e3bb1f8b626236d5271eda1b0094c2bac497be90d",
+        "packages/@core/dispatch/domain/channel.ts": "6f96c4c11b301d0155c7b82fd8a484dc5e830a84bcb19065e29dbcb0940e2664",
+        "packages/@core/dispatch/domain/engine.ts": "ccfbe83273c9e4b5c906bf8df52272be0cf90c873ace5ff3105c71ac0c32e95d",
+        "packages/@core/dispatch/domain/handler.ts": "ff39579ad7cdf2d4b7d47a47b284023fc081cac2406fccc9f1861e3ee75ac9f2",
+        "packages/@core/dispatch/domain/message.ts": "b30380c7ba8e764de5d0e94ff97193cfd794c1fa2475fb874ba15c23ebe959ba",
+        "packages/@core/dispatch/domain/messageRepository.ts": "fc08d14d6d334c7db108cc9c5f4864a241ac97b79e38e650b58d9243934632ca",
+        "packages/@core/dispatch/domain/router.ts": "22449d8d990c1508e5a4d4590bb216d27b44ec5c8a62162277dd0e0589caf890",
+        "packages/@core/dispatch/domain/thread.ts": "d9054a61811c4529e59bcc2a7d97e3d57535ffdb5d3ee24dd02fd51f6b4bac64",
+        "packages/@core/dispatch/domain/threadRepository.ts": "3e73e697b4a36d2a5e1477f86489d18cc8d0b72cd3a8388e6f4b657118130e61",
+        "packages/@core/dispatch/feedback/project-implementation-feedback.md": "cf2ff62f253e44b0f29980e4fa4f1689d230673bd55eb0fd41cc11e5db49e6b9",
+        "packages/@core/dispatch/index.ts": "3c20306711e9ba303cbd27b84630ec671f132433b5a9e276cd9de45b75f636a4",
+        "packages/@core/dispatch/infrastructure/adapters/emailAdapter.ts": "1dcd6b29a705363efb552db9ff76dcf74784622c1145d700f12bb405a7edb9f4",
+        "packages/@core/dispatch/infrastructure/adapters/pushAdapter.ts": "4c90300ccedf939aee6844c5bc34728f4d5eafe352e9dc1c35ba6f2b10382e40",
+        "packages/@core/dispatch/infrastructure/adapters/slackAdapter.ts": "a984e5764c1eb9e82d72ac3d9a03008041d5d08220a95748830a6009e7a43e07",
+        "packages/@core/dispatch/infrastructure/adapters/webhookAdapter.ts": "7ea968174618792e5c9b3dc0ebaa095d2eb55c7e0567f96c991581b19e915265",
+        "packages/@core/dispatch/infrastructure/repositories/DrizzleMessageRepository.ts": "68d049aaaac563e92e70da294c1c223dd2171fad2c3b699fbfa4c7a61d7c9514",
+        "packages/@core/dispatch/infrastructure/repositories/DrizzleThreadRepository.ts": "4cef448565f8efefa4c085e81f129977e90d72571b231f3f7c3720f1853ce784",
+        "packages/@core/dispatch/infrastructure/triggers/cronProcessor.ts": "a6a290b90542c0a105f3d1336b0f86c6a579af3fc71e6fd76679c0a260fef5b5",
+        "packages/@core/dispatch/infrastructure/triggers/inngestFunctions.ts": "414aa2c9a06c694e918c8c11c2b092795d5639d85b2bc3dd406463d533d43073",
+        "packages/@core/dispatch/schema/enums.ts": "0488ab72bde613d48a0fe635f5b2ef43846a1ffa5796af3169d5b79b132d9e86",
+        "packages/@core/dispatch/schema/index.ts": "9fa50fef0a7e9e00178fd612ed230923d36969571059afbb3d5078b00d95a069",
+        "packages/@core/dispatch/schema/messages.ts": "ffe72c03312c6026522923e8628bc7bd25eb6fe796732cac1407650de6c7fa86",
+        "packages/@core/dispatch/schema/relations.ts": "bc343ec7deaf6e64f1d5d007c521cc7c2a6fce07f752d9ab669b09a892e83671",
+        "packages/@core/dispatch/schema/threads.ts": "866b12bc1cef33f98a999328ab53878ffc772f4fb9cb36224be7967049b10907"
+      },
+      "compositeHash": "09bead37e8a9e1f24a45deb97c089d99a8ba393a371e2d1f7672cca0e54e40bf"
+    },
+    "notifications": {
+      "name": "notifications",
+      "category": "package",
+      "installedAt": "2026-06-05T22:08:55.992Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        "packages/@core/notifications/AGENT.md": "3174b40484a7bb215de32a1ae36db399c713815bdbf9878a301dbcd1b0cb07bf",
+        "packages/@core/notifications/CONNECTIONS.md": "7dea7e1b7158a8bca19a3e9228df4754c9c49406f7dc678f19834d28823f4c8c",
+        "packages/@core/notifications/OVERVIEW.md": "50432147659b1223355ef319f57aaa3d093fc2d992799fdf8db516c9093e946f",
+        "packages/@core/notifications/USAGE.md": "8a560ab5a02aa5571a372632dbae2c01276b56bcff06d30c4933fdf140dd5380",
+        "packages/@core/notifications/application/createBulkNotificationsUseCase.ts": "b58a5c9445268a5e6d8c81f3e1543943fa93d8fe4d82fa5fa21381e63f3160d4",
+        "packages/@core/notifications/application/createNotificationUseCase.ts": "8caa6c38a2c14f69829e0599348cb719d1346ec8d98688fc1ec68fabda70e780",
+        "packages/@core/notifications/application/getNotificationCountsUseCase.ts": "c4151b74ec24a0a8f8d861795d96cb0ffd8b912282452241c5cca64b9718f37a",
+        "packages/@core/notifications/application/getNotificationsUseCase.ts": "7f177ce52bba5bd13f4aec5d65ab32709184c80f8a176f0343f1efa78ca422a2",
+        "packages/@core/notifications/application/getPreferencesUseCase.ts": "52c8d40dffee9e081be8dd2ba8216bf009e15bff499a69f752266d19f14efc97",
+        "packages/@core/notifications/application/getUnreadCountUseCase.ts": "397411031f5741018202947a87961a64385eae975c582822b8ed392dd20c47c3",
+        "packages/@core/notifications/application/markAllAsReadUseCase.ts": "521c041352c38eb50d8941c30e49dc301d9d90173dd969f97b977316013f9c30",
+        "packages/@core/notifications/application/markAsReadUseCase.ts": "e498646e50b43ddb82fdf4310fe6e65cefc6fec3cc714b9229d35f41bc95a203",
+        "packages/@core/notifications/application/notificationError.ts": "664313429e018ddecf3f0887016d184e69870ab309fa7cb35d2becc994275b2f",
+        "packages/@core/notifications/application/updatePreferencesUseCase.ts": "0bed6bc04f522dc7de94f68d600b1b20333421af7dcd3a0328e65b40cee340ae",
+        "packages/@core/notifications/capabilities.yml": "c7b2514970e28f54a79c40adcd91e05a84a7880a8a4b343ea524aa5d048375ea",
+        "packages/@core/notifications/domain/notification.ts": "19359377a7f09450156106c5f3f8e60c65efd50455a0aacbc66166533d395dc2",
+        "packages/@core/notifications/domain/notificationPreference.ts": "951fdb2ecc2de772082db3b784305f5db3ec4a2f4dfcb09d396ae31b5df2a5ab",
+        "packages/@core/notifications/domain/notificationRepository.ts": "addadc56ee1f694d74018e362fb9a5224329df4c3f0b026f25d8f7b388bcf049",
+        "packages/@core/notifications/index.ts": "86c420d367575bffb32a5c0a5351e28f3f1cf944531b944011fd08c1b18ef5fd",
+        "packages/@core/notifications/infrastructure/database.ts": "ed7290c55066a6f797c5f0457b823180b78b1b5b8cd94a0bb7a63685726a3d87",
+        "packages/@core/notifications/infrastructure/repositories/DrizzleNotificationRepository.ts": "c42071120554630f0d21b1cd2161266f1a3dc6c8fce20fee60a70596ba746294",
+        "packages/@core/notifications/schema/enums.ts": "87dd237319c2f62ee30bb74d086e546ffc1e9d917932862272554a49b2fd26b8",
+        "packages/@core/notifications/schema/index.ts": "1a80d7839cad66db0c23c0a76d20cf8c6d5575917b51babaf5edb57dd34312f3",
+        "packages/@core/notifications/schema/notifications.ts": "aef7cd0101cfb75895e6ea8ecf83a2c30d74766fe2a92e35424490d12d8e2a04",
+        "packages/@core/notifications/schema/preferences.ts": "11c740d94f9a3dc6d7f96026d00e2372b366aa32def777900028c2b78366f628"
+      },
+      "compositeHash": "b0abd86cd8badbe56b8a0d515650008b75601c343c1539dc6ff6d993022f1981"
+    },
+    "observability": {
+      "name": "observability",
+      "category": "package",
+      "installedAt": "2026-06-05T22:08:59.915Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        "packages/shared/observability/AGENT.md": "7c0efc7326cdbe1e2a62f17b8f696d9004c5b4e2ee01871a0aa609ecdbd2e964",
+        "packages/shared/observability/OVERVIEW.md": "7333b7dc1a7cda9278ade57458991eece0d18094570dd978ca319febfd413661",
+        "packages/shared/observability/USAGE.md": "ac4be7065e7d3eea6c732988700bb8cf92a3448c083c0ec51e08894c561f4fdf",
+        "packages/shared/observability/context.ts": "0eed6e3363f2fc7966d85a551ee5a1a2876ff17eb9deea0697b2bffbfff478da",
+        "packages/shared/observability/index.ts": "802ac8864f79400f6ce41bd478f6448e2ee6d8ef24d874f45a81f48a1da8784d",
+        "packages/shared/observability/levelControl.ts": "70956374a22c128acf7b96dbbce0e114e6dd0e3bf5a7b7acf6f8fb4daffc1b75",
+        "packages/shared/observability/levels.ts": "b47e56a940dc56490fbd01603a9de68c926eedf991bdbd605852a746e8032060",
+        "packages/shared/observability/log.ts": "ffc1d7d80284bee01ca177a8e7b224b10d70d3e31d374801c31d966a7c9d56e5",
+        "packages/shared/observability/schema.ts": "7445fbc7630bcf4c5e63537f52489595297717e4ea1698308f09bae15fd61a41",
+        "packages/shared/observability/transports/console.ts": "f4f6cf6a44f5981e9896c2fa2fb3bac4f7f769fb3c27ce01df554518755c99a7",
+        "packages/shared/observability/transports/file.ts": "556ae27db45d82a150b365e21e871e0dee79ebe871ea546ac59272030c9ac9a6"
+      },
+      "compositeHash": "5802d4b72a8fbbe3d0753c9f06f1805e1cb50ae36de4e760fbf98f42f478cb5d"
+    },
+    "infra-rules": {
+      "name": "infra-rules",
+      "category": "rule",
+      "installedAt": "2026-06-05T22:09:00.245Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/rules/infra-commandments.md": "b308b684806d06dc274f11525d85b3a9aee36a0b58493758678abe2a5e299042"
+      },
+      "compositeHash": "6507be0d4a88c17967493947fe30cdaa8afa15e160ab011cd218069b7cce4de3"
+    },
+    "infra": {
+      "name": "infra",
+      "category": "agent",
+      "installedAt": "2026-06-05T22:09:00.820Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/agents/infra.md": "d77a99e30d091cf7d9971e228e5fcca15785ae53b66e8276589fa8c5298e162f"
+      },
+      "compositeHash": "a03bc6cf5066521a769f9d383aca9d6e6310465e3b11481ff0e05dc0cf345b3d"
+    },
+    "skill-infra": {
+      "name": "skill-infra",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:09:01.191Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/infra/SKILL.md": "e1a138663fd6446f36ccf1af49f4982bdaff8ef866151da93b51c96a98b969dd"
+      },
+      "compositeHash": "f7d7ecd2a451b6c652b75f6dcbd29578eaa886aef5b406f1dbbd1f24cb1bcc7e"
+    },
+    "skill-infra-seed": {
+      "name": "skill-infra-seed",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:09:01.515Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/infra-seed/SKILL.md": "dfdca79a54a47220aae414a7cb50c524d7e9e424c401c9ecd65d4e245ce74ec2"
+      },
+      "compositeHash": "2fcf6a7d3d4c3b9cde292f5e2017c427e0d65fb6580b5655a02d1fbfea7fd330"
+    },
+    "skill-infra-port-doctor": {
+      "name": "skill-infra-port-doctor",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:09:01.796Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/infra-port-doctor/SKILL.md": "beb3b27cbd74d7bc3ea27a4d5a5030b8448b762a5d4fb7a0a1d0f24438e972f7"
+      },
+      "compositeHash": "1647ebc9270813f1286c70baed2bd20b1c94c44e9afb0677bc74330227593109"
+    },
+    "skill-infra-rotate-secret": {
+      "name": "skill-infra-rotate-secret",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:09:02.099Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/infra-rotate-secret/SKILL.md": "85fd596b28d8b3bd5096702bb6005d9a6dd018fb6ea0e55c03938b41b05f659a"
+      },
+      "compositeHash": "a275cf545ca58063d40bae95abfbd8e485bd0eb6fa6b34a99eac5c9253da9c19"
+    },
+    "skill-infra-prod-triage": {
+      "name": "skill-infra-prod-triage",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:09:02.431Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/infra-prod-triage/SKILL.md": "1bf883d11b98755a947c2f363fc2e90c98dd09ded6b66961f193ca6e54dd9eef"
+      },
+      "compositeHash": "c718cf92a34e240835c36f251f50ab96b7d643aaa96bf49f2f294156382fc67a"
+    },
+    "skill-infra-cloud-triage": {
+      "name": "skill-infra-cloud-triage",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:09:02.900Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/infra-cloud-triage/SKILL.md": "95a0a76d95ad9662fdcf38f0cbe8308846637a711db65cb5d057815579dc4860"
+      },
+      "compositeHash": "e86cdb9159af54a953ca63ab3d00cf60502fc5296a4fecf3541ccb779e3a2fe7"
+    },
+    "skill-infra-dashboard": {
+      "name": "skill-infra-dashboard",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:09:03.191Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/infra-dashboard/SKILL.md": "3b49a573d87d22f339b17a6bfd31d78d9686e7c6d6db96bae64200849cc27c1a"
+      },
+      "compositeHash": "877580f479f9d01f2140c9c5eb343d538c6fb612e91a79f0734901abac46dfcb"
+    },
+    "stack-kit": {
+      "name": "stack-kit",
+      "category": "kit",
+      "installedAt": "2026-06-05T22:09:33.513Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        "infra/_kit/OVERVIEW.md": "e75d124eae0cd9d2f6d2796e55509b78a5628e58077d044a5c0b74cb4465329d",
+        "infra/_kit/USAGE.md": "835b7e8d16af620031bd5f63ad371fb1924deefa4ddf17ae74859bbb7d96174d",
+        "infra/_kit/AGENT.md": "077221d67a83638ad538a9eabe60a473b6e0aaaef7f751aad1a467317b594239",
+        "infra/_kit/CONNECTIONS.md": "c7818c07b5f51602076c0d06a7f87cbeb51dcd5311e9f889e3923d6209920603",
+        "infra/_kit/TLS.md": "ba05cd42df0305410681037058fa43a7d926bdda778fa2b7c69f2b2cd665544f",
+        "infra/_kit/GAPS_AND_ROADMAP.md": "bfbd1033ac4fa391206dcad05c55515a4c0c5f338f46eae83d22d8176db6709d",
+        "infra/_kit/bin/stack": "5d1d1f73e7cdbf5177a754c4246cab530e423b8f550dddad1974538da31e2372",
+        "infra/_kit/bin/stack-dashboard": "21c3c5b85e38a2982426a8a04d3cebfa67934d753757b5f308345c1e3473e4c7",
+        "infra/_kit/lib/_common.sh": "237fed0e4586968d691c7254a23764bb2d3cdf3a4f8d84e7b2500d82fc58c373",
+        "infra/_kit/lib/compose.sh": "dd7cecc1b33774be9a201d941c22969608c7883b65fd68bbfb6e2d4dd0bd0c04",
+        "infra/_kit/lib/doctor.sh": "e13e20e85ed57e8ad49604c5fb09fad2a927f953181cdaf620321f3a1b5f187a",
+        "infra/_kit/lib/lifecycle.sh": "f5c5110504dfd258250d27a5a2c552ac7b8ff6a0ffbd619e84a53436ed863422",
+        "infra/_kit/lib/ports.sh": "55526a7d531b08806255c711315ad3f580cd1b1e31c7ab25f643f1f5173d35b4",
+        "infra/_kit/lib/preflight.sh": "10c37a88993f0b60d47a97bd7f734aa811f3ba521456ec6ebb8445578b7451ca",
+        "infra/_kit/lib/prod.sh": "007d8d1a19a60bf9dcd0f37750162174642c4d76c4bd1af2a1a699919cd6262c",
+        "infra/_kit/lib/sandbox.sh": "c52772654914c9a44848b060bcb27f5aeee948067998ae52c4478f588853b160",
+        "infra/_kit/lib/seed.sh": "4804a33f3c4b1ce3831c2135b875ec9311c24b5997a2766487626261175aa185",
+        "infra/_kit/lib/state.sh": "4f9647f575b397ee96e6bb774b619ecbcc8c54efdb1dfd9210c56f26137a4745",
+        "infra/_kit/lib/tls.sh": "f95cdff92b4f1c183b253315cdff7b270cb21538a19fa005c3a1b7af07cb0433",
+        "infra/_kit/seeds/_reset.sql": "5aca65ec744c96e996c18b36f996e49af3a191216d6e01da75cdb4934b276e65",
+        "infra/_kit/seeds/00-defaults.sql": "e42395ffeeadeddb88a74ce86500c57ff69d0c794c44bae34425e4097b513735",
+        "infra/_kit/seeds/20-example-scenario.sql": "ffaccee465472e8e88c571d051333325b6098baf88c9db6e3b79db83cab8cc02",
+        "infra/_kit/seeds/README.md": "f39763dc31fa122187f3a14f5bd1403dfd2d0b2a2eea4db38ff6e96003106728",
+        "infra/_kit/shell-integration.sh": "81e4231f742da01608bd454571b543c9899d1ddff8673a963b8009d37d15a4cf",
+        "infra/_kit/templates/.env.example.template": "2bd8e7beaaa2b3ba47a46b3a81438fd00333bfeb68ede0a5c8c9bcdafca6a5e2",
+        "infra/_kit/templates/Caddyfile.dev.template": "f32d2c4a87fe72bc2e042198adeeb33506e3ff5d513b4c71ef052f6727945ce5",
+        "infra/_kit/templates/Caddyfile.prod.template": "6dad7d54fbb8170a83156bc4895a81acf92be0dee30f6d290ba0b3d83d935c60",
+        "infra/_kit/templates/Dockerfile.app.template": "5e8db81cc26dcfa8d355db3cfd1ee298744d9cdc6e64ccf002bb20f44f844982",
+        "infra/_kit/templates/ansible/ansible.cfg.template": "24b7483fef49fecdd57b951b5793a4015837ea7fe75d8622a085112662acac20",
+        "infra/_kit/templates/ansible/group_vars/all/vars.yml.example.template": "eb96fee9f4f0799c46da784ba917a6d876b29dc9b246f9f1fe78bcad21e59239",
+        "infra/_kit/templates/ansible/group_vars/all/vault.yml.example.template": "ed0591f9104037e09ec82a67303ade9bd83a382f391b7db02a65832bea6fd455",
+        "infra/_kit/templates/ansible/inventory/hosts.yml.example.template": "43ad3cf22d19adaa714b17f5c34fccee80241abd606ecbdfaf18546bd88c49d6",
+        "infra/_kit/templates/ansible/provision.yml.template": "49063b05747267432db53ae84f7fa7b8e8d939204c841333da83f929eb1ca157",
+        "infra/_kit/templates/ansible/roles/app/tasks/main.yml.template": "44f8f7996553201b6e43574ddc5175b8a25a4bd842a1ff214305d3bf236b305c",
+        "infra/_kit/templates/ansible/roles/app/templates/env.j2.template": "63be4e8d681376c4deaf852f9e2341a98176c01e4274967f149b9a558877d148",
+        "infra/_kit/templates/ansible/roles/base/handlers/main.yml.template": "f51f3e822f5c532a7d2be478f00cb0ce83f5e58fc00e180e6fe3dcb3aaf7c063",
+        "infra/_kit/templates/ansible/roles/base/tasks/main.yml.template": "4d4ab751f058db6d5ee20deebe45a581da12ae9cabc6a04552685242f030709e",
+        "infra/_kit/templates/ansible/roles/docker/tasks/main.yml.template": "fb3898ee6f8382d1bbf368df928db6522aeda36d0e1ab82277175caba784eaa7",
+        "infra/_kit/templates/ansible/roles/firewall/tasks/main.yml.template": "a0652afd2d543271703087a224bd9a3e444f09e7190ca5e3836762454d34ac3f",
+        "infra/_kit/templates/ansible/roles/security/handlers/main.yml.template": "de59e1fa5bad821d80a836566562d30c37c63789ae369d4a063489b7bfd09941",
+        "infra/_kit/templates/ansible/roles/security/tasks/main.yml.template": "1fe5bf7296023b890d1964b3e610b6663cf84d8551e3d1002bd6ed4fd07222d1",
+        "infra/_kit/templates/.env.cloud.production.example.template": "e6369859e896faf5f769fcf9b6ad97b7246895e18bf5268b7b83dfe53306f02d",
+        "infra/_kit/templates/docker-compose.dev.yml.template": "65dc2865f8fcbb5e555d68c2364a8748cc8eb90fa49d2602dec6e0483a63bf64",
+        "infra/_kit/templates/docker-compose.vps.yml.template": "896e43d0c001e25a8cff6d9a506a2b47881adab2a8b2e0931043515d9efe3adb",
+        "infra/_kit/templates/github-workflows-deploy.yml.template": "77593438cf823ce0b5a70001effc636f7849d414c3159b4fa93c0cf4ce85ad2b",
+        "infra/_kit/templates/github-workflows-preview.yml.template": "b3d52b22235d2585b5b9e981394e4d50ab5a75487a9c9205cfc2a942c2beb0af",
+        "infra/_kit/templates/manifest.yaml.template": "6844f6183493a22655f64b1e7b303aa9ec5b3dbda749564b7b59aba6ea029fe0",
+        "infra/_kit/templates/neon-setup.md.template": "d7bea39508ebe981bd7da7463a7bb3977f75cd1d0214499e02c74517ffd04009",
+        "infra/_kit/templates/vercel.json.template": "e87c256dff4bdcd6eb875fc25993084e382673adcceeb52e3246138affabfc0b"
+      },
+      "compositeHash": "65392d9acf62b8f34ccfca32289d8f97c56e7ff70404b50dfe46be03aee623e8",
+      "installRoot": "infra/_kit"
+    },
+    "skill-infra-bootstrap": {
+      "name": "skill-infra-bootstrap",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:09:33.896Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/infra-bootstrap/SKILL.md": "ee86f0371de058b61cf33130a4e0bf0f24089646ebd014933247eaf9de9db64e"
+      },
+      "compositeHash": "af92322ad9c02ad7bdc94ce877606c8256cfaaa670706e80f84d486b6529e4b4"
+    },
+    "template-spine": {
+      "name": "template-spine",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:09:34.585Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        "registry/templates/roadmap.template.md": "7eed3bc1ab683babbf6543b5b292e79087db05eeba5293927c1f84c2700e27cb",
+        "registry/templates/initiative.template.md": "df0418e0d6c5515ee1bc7b876eb8105842e5575da58d24247fbc2376e651465f",
+        "registry/templates/decision.template.md": "e2631bf51470a37e744d721901d104581e0febd6da87237b33ac3c82f50fdbfd"
+      },
+      "compositeHash": "7e99317e3cd3cd053c650ea8aeb74998c4e1b9cb7d80b4228c4bb3130621a1c6"
+    },
+    "hook-captain": {
+      "name": "hook-captain",
+      "category": "hook",
+      "installedAt": "2026-06-05T22:09:34.997Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/scripts/captain-compile.mjs": "2dfe2e3e573c8cfdc60fcd6aa6cbabf6bfc883947aaee0d278548afafabc8cc5"
+      },
+      "compositeHash": "bb8d8a053188ce6552173f16f3ebf01e63f42ed26729ad36ca2ab594eba89aa3"
+    },
+    "skill-pm": {
+      "name": "skill-pm",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:09:35.341Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/skills/pm/SKILL.md": "beea6513215f65f575b156a12c9497d58b7a9e07a738e84248ecbae98f03738d"
+      },
+      "compositeHash": "e1330df21bf4dc0afa0e7c60739a925f59c4291b94872eb583157fbd1d59e374"
+    },
+    "captain": {
+      "name": "captain",
+      "category": "agent",
+      "installedAt": "2026-06-05T22:09:35.589Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/agents/captain.md": "3bb8f24aa7e353da0f7735eed14c078fb4aab4857f41b9786d74f9110037ef7b"
+      },
+      "compositeHash": "a266cb58ee2dfa876b42969c330488d1f5d9454f91ccb479663fb69fa567a636"
+    },
+    "command-captain": {
+      "name": "command-captain",
+      "category": "skill",
+      "installedAt": "2026-06-05T22:09:35.842Z",
+      "sourceCommit": "d8d12c93bccadc5922a8af959bf13f53e5bd0f67",
+      "files": {
+        ".claude/commands/captain.md": "27e5e44544384510367215682e3453b60b33ffe975e46fa28862964be6d4a37f"
+      },
+      "compositeHash": "cafbaf328286fdc28a8a4df69313429936d33b3fb0c5bd2d33f9d58271da3268"
+    }
+  }
+}

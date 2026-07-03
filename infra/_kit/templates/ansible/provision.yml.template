@@ -1,0 +1,12 @@
+---
+- name: Provision __APP_NAME__ VPS
+  hosts: app_servers
+  become: true
+  gather_facts: true
+
+  roles:
+    - base
+    - docker
+    - firewall
+    - security
+    - app

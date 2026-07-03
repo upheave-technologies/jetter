@@ -1,0 +1,153 @@
+spec_version: 1
+route: app
+files:
+  page: app/page.tsx
+  actions: app/actions.ts
+  error: app/error.tsx
+  loading: app/loading.tsx
+  not_found: app/not-found.tsx
+
+# -----------------------------------------------------------------------------
+# Data shape prepared by nexus for frankie.
+# The variable `snapshot` (type BoardSnapshot) is declared in page.tsx and
+# held alive with `void snapshot` until frankie replaces `return null`.
+# -----------------------------------------------------------------------------
+data_shape:
+  snapshot:
+    type: BoardSnapshot
+    description: >
+      Full board state computed in one shot by getBoardSnapshotUseCase.
+      Contains: now (Date), freeNow (number), nextOpening ({ at, quantity } | null),
+      out (Booking[] — soonest due first), upcoming (Booking[] — start time ascending),
+      history (Booking[] — returned + cancelled), late (Set<BookingId>),
+      atRisk (Set<BookingId>), possibleNoShow (Set<BookingId>).
+
+# -----------------------------------------------------------------------------
+# No slow fetches. getBoardSnapshot runs one SQLite query (findAll on a
+# day-filtered table) and does only pure-function work on the result.
+# No Suspense boundaries needed for the initial load.
+# -----------------------------------------------------------------------------
+slow_fetches: []
+
+# -----------------------------------------------------------------------------
+# Cache strategy
+# -----------------------------------------------------------------------------
+cache_strategy:
+  segment:
+    dynamic: force-dynamic
+    revalidate: 0
+  functions: []
+
+# -----------------------------------------------------------------------------
+# Server actions exported from app/actions.ts
+# All mutating actions call revalidatePath('/') so polling devices converge.
+# computeAvailabilityAction is a pure read — no revalidate.
+# -----------------------------------------------------------------------------
+server_actions:
+  - name: createBookingAction
+    mutates: [Booking]
+    revalidates: ["/"]
+    redirects_to: null
+    success_shape: "ActionResult<{ id: string }>"
+    notes: >
+      On OVER_CAPACITY returns a structured shape with nextOpeningAt (Date|null)
+      and nextOpeningQuantity (number) instead of a generic error, so the form
+      container can display the live verdict without a second round-trip (FR-5 / FR-7).
+
+  - name: sendOutAction
+    mutates: [Booking]
+    revalidates: ["/"]
+    redirects_to: null
+    success_shape: "ActionResult<void>"
+
+  - name: returnSkisAction
+    mutates: [Booking]
+    revalidates: ["/"]
+    redirects_to: null
+    success_shape: "ActionResult<void>"
+
+  - name: extendBookingAction
+    mutates: [Booking]
+    revalidates: ["/"]
+    redirects_to: null
+    success_shape: "ActionResult<void>"
+
+  - name: cancelBookingAction
+    mutates: [Booking]
+    revalidates: ["/"]
+    redirects_to: null
+    success_shape: "ActionResult<void>"
+
+  - name: editBookingAction
+    mutates: [Booking]
+    revalidates: ["/"]
+    redirects_to: null
+    success_shape: "ActionResult<void>"
+    notes: >
+      renterName / notes: empty string in FormData is coerced to null ("clear the
+      field"); field absent from FormData means "do not touch". The use case
+      receives undefined for untouched fields.
+
+  - name: computeAvailabilityAction
+    mutates: []
+    revalidates: []
+    redirects_to: null
+    success_shape: "ActionResult<AvailabilityVerdict>"
+    notes: >
+      Pure read-only query. Accepts a typed argument { quantity, startTimeMs,
+      durationMin } (not FormData). Called frequently from BookingFormContainer
+      as the operator adjusts form values. No revalidatePath.
+
+# -----------------------------------------------------------------------------
+# Metadata
+# -----------------------------------------------------------------------------
+metadata:
+  strategy: static
+  fields: [title, description]
+
+# -----------------------------------------------------------------------------
+# What frankie must do next (ordered)
+# -----------------------------------------------------------------------------
+next_steps_for_frankie:
+  - Replace `return null` in app/page.tsx with `<BoardView snapshot={snapshot} />`
+    and add the import for BoardView.
+  - Remove the `void snapshot;` line (no longer needed once the component is wired).
+  - Create app/_components/BoardView/ — the outer page shell (AvailabilityHeader
+    at the top, BookingsList below, HistoryToggle at the bottom).
+  - Create app/_components/AvailabilityHeader/ — freeNow count + nextOpening line
+    (FR-12, U-5 glanceability, above the phone fold).
+  - Create app/_components/BookingsList/ — two sections: Out (soonest due first,
+    late bookings red and pinned to top per FR-2 / FR-14) and Upcoming (time order).
+  - Create app/_components/BookingRow/ — status pill, late / at-risk / no-show flags
+    (using snapshot.late, snapshot.atRisk, snapshot.possibleNoShow sets),
+    and row-action forms wired to server actions via `<form action={...}>`.
+  - Create app/_components/HistoryToggle/ — client component that toggles
+    snapshot.history rows into view (FR-3).
+  - Create app/_components/BookingFormPanel/ — quantity stepper 1–8, start = Now
+    or HH:MM presets, duration 30/45/60/custom, name & notes, live verdict display,
+    Book and Book-anyway buttons (U-2, U-3).
+  - Create app/_containers/BookingFormContainer/ — `'use client'` leaf that holds
+    form ephemeral state and calls computeAvailabilityAction for the live verdict.
+    Passes the verdict result to BookingFormPanel as a prop.
+  - Create app/_containers/BoardSyncContainer/ — `'use client'` leaf that calls
+    `router.refresh()` every ~2 seconds (SPEC Decision #4, FSD §13 M-2 sync).
+    Mount this inside BoardView so it is always running while the board is visible.
+  - Style app/loading.tsx with a skeleton that matches the Board layout (full-height,
+    same sections as BoardView).
+  - Style app/error.tsx with recoverable-error UI: message + Reset button that
+    calls `reset()`.
+  - Style app/not-found.tsx with a minimal 404 message.
+  - Design system: Tailwind v4, high-contrast, large touch targets, sunlight-legible
+    (U-6). All tokens via app/globals.css @theme. No hardcoded colors.
+
+# -----------------------------------------------------------------------------
+# Auth deviation note (for the auditor)
+# -----------------------------------------------------------------------------
+auth_deviation:
+  present: false
+  documented: true
+  rationale: >
+    The Booth Board has no user accounts (SPEC Decision #1, FSD §6 locked).
+    Session lookup and ability checks are intentionally absent from both
+    page.tsx and all server actions. This is called out in top-of-file
+    comments in both files so future reviewers do not treat it as an oversight.

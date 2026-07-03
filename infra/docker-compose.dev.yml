@@ -1,0 +1,137 @@
+# =============================================================================
+# Jet Ski Booth Board — local dev compose
+# =============================================================================
+# Two services:
+#   - postgres : the database (PostgreSQL 16, alpine). Persists in a NAMED
+#                volume `pgdata` (NOT a bind mount — pgdata is sacred; see
+#                infra-commandments §5). Health-gated so the board only starts
+#                once Postgres is accepting connections.
+#   - board    : the Next.js 16 app (standalone server). Talks to Postgres over
+#                the compose network via the in-network DATABASE_URL.
+#
+# Storage migration (this change-unit): the module moved from SQLite (a
+# bind-mounted ./data/board.db file) to PostgreSQL (Neon in production, local
+# Docker Postgres in dev) via the node-postgres `pg` driver behind a single
+# DATABASE_URL. The old `data/` bind mount and BOOKINGS_DB_PATH knob are gone.
+#
+# Schema is applied by REAL drizzle-kit migrations run FROM THE HOST
+# (`pnpm db:migrate`), NOT by the container at boot. The migration runner is a
+# devDependency and is deliberately absent from the production image. After
+# `stack up` (or `pnpm docker:up`), the operator runs `pnpm db:migrate` from the
+# host (which reaches Postgres via the mapped localhost port) and then
+# `pnpm seed` to load a packed demo day. See infra/README.md.
+#
+# How to run:
+#   - Preferred:  infra/_kit/bin/stack up
+#   - Manual:     docker compose -f infra/docker-compose.dev.yml up -d
+# =============================================================================
+
+name: jet
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jet-postgres
+
+    # Local-dev credentials. The same defaults drive the board's in-network
+    # DATABASE_URL below and the host-facing DATABASE_URL in infra/.env. These
+    # are NOT secrets — they are throwaway local-dev values. Production uses a
+    # Neon connection string set in the deploy/Vercel env, never here.
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-jet}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-jet}"
+      POSTGRES_DB: "${POSTGRES_DB:-jet}"
+
+    # The kit's port allocator (when invoked via `stack up`) writes
+    # STACK_PORT_DB into infra/.ports and exports it before invoking compose,
+    # giving every worktree its own host port (infra-commandments §8). When
+    # running compose by hand, set STACK_PORT_DB yourself or accept 5432.
+    # The container always listens on 5432; this maps a host port onto it so
+    # host tooling (pnpm db:migrate / pnpm seed) can reach the DB.
+    ports:
+      - "${STACK_PORT_DB:-5432}:5432"
+
+    # NAMED volume — pgdata is sacred. A bind mount would scatter Postgres's
+    # data dir across the host fs and invite accidental `rm -rf`; a named
+    # volume is managed by Docker and only dropped on an explicit, deliberate
+    # `down -v` / `volume rm` (infra-commandments §5).
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      # $$POSTGRES_USER (doubled $) so compose passes a literal $POSTGRES_USER
+      # to the shell inside the container, which resolves it from the container
+      # env — NOT compose-interpolated at the host.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+    restart: unless-stopped
+
+    # Labels — picked up by the cross-project dashboard at localhost:42137.
+    labels:
+      com.docker.compose.project: "jet"
+      stack.kit.profile: "full"
+      stack.kit.service: "postgres"
+
+  board:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: jet-board:dev
+    container_name: jet-board
+
+    # Don't start the board until Postgres is healthy — otherwise the first
+    # request (or a boot-time connection) races the DB and flaps.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # The kit's port allocator (when invoked via `stack up`) writes
+    # STACK_PORT_APP into infra/.ports and exports it before invoking compose.
+    # When running compose by hand, you can either:
+    #   - set STACK_PORT_APP yourself (`STACK_PORT_APP=4123 docker compose up`)
+    #   - or accept the default 3000 below
+    ports:
+      - "${STACK_PORT_APP:-3000}:3000"
+
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: "0.0.0.0"
+      # In-network connection string — the board reaches Postgres by its
+      # compose SERVICE NAME (`postgres`) on the internal network port 5432,
+      # NOT via the host-mapped port. Driven by the same default credential
+      # vars as the postgres service so the two never drift.
+      DATABASE_URL: "postgres://${POSTGRES_USER:-jet}:${POSTGRES_PASSWORD:-jet}@postgres:5432/${POSTGRES_DB:-jet}"
+      # Surface application log level if the operator wants verbose output.
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      # Login-gate secret read at runtime by lib/auth.ts. FAIL-CLOSED (DEC-AG4):
+      # unset/empty = the board is locked. The `:-}` empty-default preserves that
+      # contract and keeps compose from emitting an interpolation warning when
+      # APP_PASSWORD isn't set. Sourced from infra/.env (gitignored).
+      APP_PASSWORD: "${APP_PASSWORD:-}"
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+    restart: unless-stopped
+
+    # Labels — picked up by the cross-project dashboard at localhost:42137.
+    labels:
+      com.docker.compose.project: "jet"
+      stack.kit.profile: "full"
+      stack.kit.service: "board"
+
+# Named volume for Postgres's data dir. Dropping this is destructive — it wipes
+# every booking. `docker compose -f infra/docker-compose.dev.yml down -v` or a
+# targeted `docker volume rm jet_pgdata` are the only paths, and both require
+# deliberate intent (infra-commandments §5).
+volumes:
+  pgdata: {}

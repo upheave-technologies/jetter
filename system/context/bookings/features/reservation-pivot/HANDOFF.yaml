@@ -1,0 +1,230 @@
+spec_version: 1
+route: app/(root)/
+files:
+  page: app/page.tsx
+  actions: app/actions.ts
+  error: app/error.tsx        # existing — frankie fills the body; no structural change needed
+  loading: app/loading.tsx    # existing — body references old snapshot layout; frankie rewrites
+  not_found: null
+
+data_shape:
+  board:
+    type: DayBoard
+    description: >
+      Full day board for the selected day: reservations[], maintenance[],
+      density[], utilization, freeNow (null when not today), nextOpeningAt
+      (null when not today), isToday, now, day, bucketMin.
+      Source: getDayBoard use case.
+  fine:
+    type: boolean
+    description: >
+      True when ?fine=1 is set in the URL. Passed to BoardView so the
+      density bucket-size toggle renders as selected.
+  dayParam:
+    type: string
+    description: "YYYY-MM-DD of the currently displayed day (Europe/Zagreb)."
+  prevDayParam:
+    type: string
+    description: "YYYY-MM-DD for the Prev day navigation link."
+  nextDayParam:
+    type: string
+    description: "YYYY-MM-DD for the Next day navigation link."
+  todayParam:
+    type: string
+    description: "YYYY-MM-DD for today (Europe/Zagreb) — used to highlight the Today button."
+  isToday:
+    type: boolean
+    description: "True when dayParam === todayParam."
+
+slow_fetches: []
+
+cache_strategy:
+  segment:
+    dynamic: force-dynamic
+    revalidate: 0
+  functions: []
+
+server_actions:
+  # --- MUTATIONS (call revalidatePath('/') on success) ---
+  - name: createBookingAction
+    input: FormData { quantity, startTimeMs (epoch-ms), durationMin, renterName?, notes? }
+    mutates: [Booking]
+    revalidates: ["/"]
+    redirects_to: null
+    success_shape: "ActionResult<{ id: string }>"
+    kind: mutation
+    error_codes_mapped: [CAPACITY_EXCEEDED, PAST_START, IMMUTABLE_PAST, NOT_FOUND, VALIDATION_ERROR, SERVICE_ERROR]
+
+  - name: editBookingAction
+    input: FormData { id, quantity?, startTimeMs? (epoch-ms), durationMin?, renterName?, notes? }
+    mutates: [Booking]
+    revalidates: ["/"]
+    redirects_to: null
+    success_shape: "ActionResult<void>"
+    kind: mutation
+    error_codes_mapped: [CAPACITY_EXCEEDED, PAST_START, IMMUTABLE_PAST, NOT_FOUND, VALIDATION_ERROR, SERVICE_ERROR]
+    notes: >
+      Empty string for renterName/notes clears the field (sets to null).
+      Absent field leaves the existing value unchanged.
+
+  - name: cancelBookingAction
+    input: FormData { id }
+    mutates: [Booking]
+    revalidates: ["/"]
+    redirects_to: null
+    success_shape: "ActionResult<void>"
+    kind: mutation
+    error_codes_mapped: [IMMUTABLE_PAST, NOT_FOUND, VALIDATION_ERROR, SERVICE_ERROR]
+
+  - name: blockScooterAction
+    input: FormData { quantity, startTimeMs (epoch-ms), endTimeMs (epoch-ms), notes? }
+    mutates: [Booking (kind='maintenance')]
+    revalidates: ["/"]
+    redirects_to: null
+    success_shape: "ActionResult<{ id: string }>"
+    kind: mutation
+    error_codes_mapped: [VALIDATION_ERROR, SERVICE_ERROR]
+    notes: >
+      Creates a maintenance block. No capacity check — honest over-commitment.
+      Operator uses this to mark malfunctioning scooters unavailable.
+
+  - name: applyReconciliationAction
+    input: >
+      typed { proposal: ReconciliationProposalWire }
+      where ReconciliationProposalWire = {
+        changes: { bookingId, currentStartMs, suggestedStartMs, delayMinutes }[],
+        unresolvable: string[]
+      }
+    mutates: [Booking]
+    revalidates: ["/"]
+    redirects_to: null
+    success_shape: "ActionResult<{ applied: number; skipped: number }>"
+    kind: mutation
+    error_codes_mapped: [VALIDATION_ERROR, SERVICE_ERROR]
+    notes: >
+      Applies the proposal returned by proposeReconciliationAction.
+      All Dates in the input are epoch-ms numbers.
+
+  # --- QUERIES (no revalidatePath) ---
+  - name: computeAvailabilityAction
+    input: "typed { quantity: number; startTimeMs: number; durationMin: number }"
+    mutates: []
+    revalidates: []
+    redirects_to: null
+    success_shape: "ActionResult<AvailabilityVerdict>"
+    kind: query
+    notes: >
+      Live availability verdict for the booking form.
+      AvailabilityVerdict = { fits: true, freeAtSlot } | { fits: false, nextOpeningAt: Date|null }
+      NOTE: nextOpeningAt in the returned value is a Date object (server side).
+      Client containers should handle it as a Date.
+
+  - name: computeOpenSlotsAction
+    input: "typed { quantity: number; durationMin: number; fromTimeMs: number }"
+    mutates: []
+    revalidates: []
+    redirects_to: null
+    success_shape: "ActionResult<OpenSlotsResult>"
+    kind: query
+    notes: >
+      Slot-finder: first possible slot + up to 8 open slots for the selection
+      on the fromTime's local day (DEC-P5).
+      OpenSlotsResult = { firstSlot: Date|null, slots: Date[] }
+      NOTE: Date objects in the response. Client containers handle them as Dates.
+
+  - name: proposeReconciliationAction
+    input: >
+      typed { dayMs: number; disruption: DisruptionWire }
+      where DisruptionWire =
+        | { type: 'delay', bookingId: string, extraMinutes: number }
+        | { type: 'capacity_drop', quantity: number, untilMs: number }
+    mutates: []
+    revalidates: []
+    redirects_to: null
+    success_shape: "ActionResult<ReconciliationProposalWire>"
+    kind: query
+    notes: >
+      Computes the minimal proposal. NEVER auto-applies (DEC-P6).
+      Output ReconciliationProposalWire = {
+        changes: { bookingId, currentStartMs, suggestedStartMs, delayMinutes }[],
+        unresolvable: string[]
+      }.
+      All Dates are serialized as epoch-ms numbers in the output.
+      Pass the returned proposal directly to applyReconciliationAction to apply.
+
+metadata:
+  strategy: null
+  fields: []
+  notes: >
+    No metadata needed — this is an operator tool, not a public page. No SEO.
+
+removed_actions:
+  - sendOutAction     # DEC-P1: send-out lifecycle removed
+  - returnSkisAction  # DEC-P1: return lifecycle removed
+  - extendBookingAction  # DEC-P1: extend folds into editBookingAction
+
+lib_time_additions:
+  - parseDayParam(dayStr, now): Date
+      "Parses ?day=YYYY-MM-DD → Date at UTC noon on that Zagreb day. Falls back to now."
+  - formatDayParam(day): string
+      "Formats a Date → 'YYYY-MM-DD' in Europe/Zagreb."
+  - addDays(day, n): Date
+      "Adds n days to day (noon-anchored). Used for prev/next nav params."
+
+component_prop_changes:
+  BoardView:
+    old: "{ snapshot: BoardSnapshot; showHistory: boolean }"
+    new: >
+      {
+        board: DayBoard;
+        fine: boolean;
+        dayParam: string;
+        prevDayParam: string;
+        nextDayParam: string;
+        todayParam: string;
+        isToday: boolean;
+      }
+    note: >
+      BoardView.tsx body replaced with `return null` (nexus handoff state).
+      Frankie rewrites the entire body. The prop interface is the contract.
+
+next_steps_for_frankie:
+  - Replace `return null` in BoardView.tsx with the reservation-pivot UI layout.
+  - Create day-navigation bar (Prev / Today / Next) using dayParam, prevDayParam,
+    nextDayParam, todayParam, isToday. Each nav item is a <Link href={`/?day=X`}>.
+  - Create density chart component (popular-times-style bars) from board.density.
+    Add bucket-size toggle: <Link href={`/?day=X&fine=1`}> vs `/?day=X` (default 15-min).
+  - Create utilization panel from board.utilization (%, peakConcurrent,
+    busiestHourStart, idleScooterMinutes, reservationCount).
+  - Rebuild AvailabilityHeader using DayBoard (board.freeNow, board.nextOpeningAt,
+    board.isToday, board.now). Remove BoardSnapshot import.
+  - Rebuild BookingsList: split board.reservations and board.maintenance into two
+    sections; remove showHistory (no more history toggle — cancelled rows hidden).
+  - Rebuild BookingRow for the reserved|cancelled × reservation|maintenance model:
+    - Remove all sendOut / return / extend affordances (AC-1).
+    - Edit and Cancel buttons for future-only reservations (board.isToday + board.now
+      for future-guard; past/in-progress rows are read-only).
+    - Maintenance blocks: cancel only (no edit — maintenance is immutable via edit).
+  - Rebuild StatusPill: support 'reserved'|'cancelled' × 'reservation'|'maintenance'.
+    Remove 'booked'|'out'|'returned' variants.
+  - Create MaintenanceBlockPanel (form → blockScooterAction via FormData with
+    startTimeMs, endTimeMs as epoch-ms).
+  - Create SlotFinderPanel: quantity + duration + desired time input → calls
+    computeOpenSlotsAction (typed query); shows firstSlot + slots list; operator
+    taps a slot → pre-fills createBookingAction form.
+  - Create ReconciliationPanel: disruption form → calls proposeReconciliationAction
+    → renders proposal (changes with delay info + unresolvable list) → Apply button
+    calls applyReconciliationAction with the wire proposal. NEVER auto-applies.
+  - Rewrite loading.tsx skeleton to match the new board layout (day-nav bar,
+    density chart, utilization strip, reservation list).
+  - Keep error.tsx body unchanged (it works; no boarding-specific content).
+  - SERIALIZATION NOTE: actions return Date objects for query actions (not ms).
+    Client containers use Date objects directly (they come back from server actions
+    as serialized JS objects). Epoch-ms is only required for the INPUT direction.
+
+remaining_errors_for_frankie:
+  # These are ALL in _components/; page.tsx and actions.ts compile clean.
+  - "app/_components/AvailabilityHeader/AvailabilityHeader.tsx — BoardSnapshot import"
+  - "app/_components/BookingRow/BookingRow.tsx — sendOutAction/returnSkisAction imports; status 'out'/'booked' comparisons; returnedCount field"
+  - "app/_components/BookingsList/BookingsList.tsx — BoardSnapshot import; implicit any on booking params"
+  - "app/_components/StatusPill/StatusPill.tsx — 'booked'/'out'/'returned' status comparisons"

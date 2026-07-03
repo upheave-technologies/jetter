@@ -1,0 +1,60 @@
+spec_version: 1
+route: app/audit
+
+# STATUS: REMOVED 2026-07-02 (DEC-AU9 in SPEC.md).
+# The in-app audit viewer at /audit was deleted. The audit log is now operator-only
+# via direct database access — there is no in-app viewing surface. The RECORDING path
+# (recordAuditEvent + append) is fully preserved; only this VIEWER route is gone.
+# This file is retained as feature history — it documents the viewer that once existed
+# and the handoff that built it, not a live surface.
+status: removed
+removed_on: 2026-07-02
+removed_by_change_unit: >
+  Audit Log GUI removal — see SPEC.md DEC-AU9 and the 2026-07-02 Change Log entry.
+  Deleted: app/audit/{page.tsx,loading.tsx,_components/AuditLogView/AuditLogView.tsx},
+  modules/audit/application/listAuditEventsUseCase.ts (+ .capability.ts),
+  IAuditEventRepository.findRecent (+ its Drizzle impl), and the BoardView "Zapisnik" footer link.
+
+# --- Historical handoff record (the viewer that existed 2026-07-02 until its removal the same day) ---
+# All fields below described the delivered viewer BEFORE removal. They no longer reflect a live route.
+historical:
+  files:
+    page: page.tsx            # REMOVED
+    actions: null
+    error: null
+    loading: loading.tsx      # REMOVED
+    not_found: null
+
+  data_shape:
+    # Backed by listAuditEvents (REMOVED) reading findRecent (REMOVED from the repository).
+    events:
+      type: AuditEvent[]
+      description: >
+        Paginated list of audit events, newest first, from listAuditEvents (now removed).
+        AuditEvent fields: id, occurredAt (Date), entityType, action, entityId,
+        actor, summary, before, after, metadata. All Date fields are real Date
+        objects — this was a server component tree, no epoch-ms serialization needed.
+    limit:
+      type: number
+      description: Page size (default 50, max 200, clamped to use-case bounds)
+    offset:
+      type: number
+      description: Pagination offset (default 0)
+
+  slow_fetches: []
+
+  cache_strategy:
+    segment:
+      dynamic: force-dynamic
+      revalidate: null
+    functions: []
+
+  server_actions: []
+
+  metadata:
+    strategy: static
+    fields: [title, description]
+
+# next_steps_for_frankie removed — the handoff is complete and the route it described no longer exists.
+# Note: AuditEvent itself is still a live domain type (modules/audit/domain/types.ts); only the
+# viewer route, the listAuditEvents query, and the findRecent read were removed.

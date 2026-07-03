@@ -1,0 +1,39 @@
+spec_version: 1
+route: app (root — editMaintenanceAction added to app/actions.ts, no new route segment)
+
+files:
+  page: null
+  actions: app/actions.ts (editMaintenanceAction appended)
+  error: null
+  loading: null
+  not_found: null
+
+data_shape: {}
+
+slow_fetches: []
+
+cache_strategy:
+  segment:
+    dynamic: null
+    revalidate: null
+  functions: []
+
+server_actions:
+  - name: editMaintenanceAction
+    mutates: [Booking (kind=maintenance)]
+    revalidates: ["/"]
+    redirects_to: null
+    success_shape: "ActionResult<void>"
+
+metadata:
+  strategy: null
+  fields: []
+
+next_steps_for_frankie:
+  - Create MaintenanceEditContainer ('use client' slim proxy) that binds editMaintenanceAction
+  - Create MaintenanceEditPanel (pure) — quantity 1–8 grid, Od/Do HH:MM time inputs, notes field, save/cancel buttons
+  - Wire onto each editable maintenance row of the board (canEditMaintenance gate determines visibility)
+  - Croatian copy consistent with the create panel ("Uredi nedostupnost")
+  - No live availability verdict (DEC-EM3 — no fits() check on maintenance edit)
+  - Dates submitted as epoch-ms: startTimeMs and endTimeMs form fields
+  - id submitted as hidden form field

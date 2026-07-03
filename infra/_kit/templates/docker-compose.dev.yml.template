@@ -1,0 +1,64 @@
+# =============================================================================
+# Template — local full-stack compose (Caddy + App + Postgres)
+# Used by /infra-bootstrap. Placeholders are substituted at install time.
+# =============================================================================
+# Notes:
+#   - Ports are NOT hardcoded here. The kit generates an auto-override at
+#     infra/.compose.override.yml that maps standard internal ports to the
+#     worktree's allocated host ports.
+#   - This file declares which env vars get passed into the app container. The
+#     kit reads them from infra/.env (gitignored, dev-only).
+# =============================================================================
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    volumes:
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      # mkcert-generated TLS material — populated by `stack tls install`,
+      # mounted read-only. Files in infra/certs/ are gitignored.
+      - ./certs:/etc/caddy/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    # Note: no depends_on app — Caddy starts regardless of whether the app
+    # container is running. The host runs the Next.js app via `pnpm dev`.
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # app — only started with `stack up --profile full` (or docker compose
+  # --profile full up). Default `stack up` intentionally omits this service;
+  # the Next.js dev server runs on the host via `pnpm dev` instead.
+  # ---------------------------------------------------------------------------
+  __APP_SERVICE__:
+    profiles: [full]
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.__APP_SERVICE__
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://__APP_SLUG__:${POSTGRES_PASSWORD:-__APP_SLUG__}@postgres:5432/__APP_SLUG__
+      NODE_ENV: production
+      # Add your app's env vars here as `KEY: ${KEY:-}` (use `${KEY}` if required).
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: __APP_SLUG__
+      POSTGRES_USER: __APP_SLUG__
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-__APP_SLUG__}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U __APP_SLUG__"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
