@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import type { DensityBucket } from '@/modules/bookings/domain/types';
 
-// Fleet baseline for bar height math — matches SPEC non-negotiable.
-// Named constant with comment; not imported from domain/config (layer boundary).
-const FLEET = 8;
+// Fleet baseline for bar height math — mirrors domain FLEET_SIZE = 6 (DEC-P10, 2026-07-03 fleet reduction 8→6).
+// Kept as a local display constant; not imported from domain/config (app→domain boundary).
+const FLEET = 6;
 
 type DensityChartProps = {
   density: DensityBucket[];
@@ -19,7 +19,7 @@ type DensityChartProps = {
  *
  * Each bar encodes committed scooters (reserved + maintenance) for one time bucket.
  * The bar is stacked: reserved (primary token) bottom, maintenance (warning token) top.
- * The fleet ceiling (FLEET=8) is the full bar height; a full bar = fully booked.
+ * The fleet ceiling (FLEET=6) is the full bar height; a full bar = fully booked.
  *
  * X-axis hour labels appear only for buckets within [windowStart, windowEnd].
  * Bucket-size toggle: [5 min] / [15 min] links (preserve ?day param).

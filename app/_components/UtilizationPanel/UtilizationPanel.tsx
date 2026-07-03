@@ -2,8 +2,9 @@ import { TrendingUp, Users, Clock, Zap } from 'lucide-react';
 import type { UtilizationReport } from '@/modules/bookings/domain/types';
 import { formatHHMM } from '@/lib/time';
 
-// Fleet baseline — 8 scooters, named constant per SPEC.
-const FLEET = 8;
+// Fleet baseline — 6 scooters (DEC-P10, 2026-07-03 fleet reduction 8→6). Mirrors domain FLEET_SIZE = 6.
+// Kept as a local display constant; not imported from domain/config (app→domain boundary).
+const FLEET = 6;
 
 type UtilizationPanelProps = {
   utilization: UtilizationReport;

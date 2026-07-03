@@ -2,9 +2,9 @@ import type { DayBoard } from '@/modules/bookings/domain/types';
 import { JetterLogo } from '@/app/_components/JetterLogo/JetterLogo';
 import { formatHHMM } from '@/lib/time';
 
-// Fleet baseline for "X/8" display — matches SPEC non-negotiable FLEET=8.
-// Named constant with comment per prompt instructions; not imported from domain/config.
-const FLEET = 8;
+// Fleet baseline for "X/6" display — mirrors domain FLEET_SIZE = 6 (DEC-P10, 2026-07-03 fleet reduction 8→6).
+// Kept as a local display constant; not imported from domain/config (app→domain boundary).
+const FLEET = 6;
 
 type AvailabilityHeaderProps = {
   board: Pick<DayBoard, 'freeNow' | 'nextOpeningAt' | 'now' | 'isToday' | 'utilization'>;
@@ -14,7 +14,7 @@ type AvailabilityHeaderProps = {
  * Sticky top bar — brand lockup + availability hero + clock.
  *
  * When isToday and freeNow !== null:
- *   Shows "Slobodno sada: N/8" with colour-coded emphasis.
+ *   Shows "Slobodno sada: N/6" with colour-coded emphasis.
  *   If freeNow < FLEET and nextOpeningAt set: shows "Sljedeći slobodan termin u HH:MM".
  *   If freeNow === 0 and no nextOpeningAt: shows "Sve zauzeto — nema slobodnih termina danas".
  *

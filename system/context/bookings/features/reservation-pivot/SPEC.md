@@ -24,29 +24,27 @@ updated: 2026-07-03
 ---
 
 <!-- AUTO:CARD — overwritten by the auditor on every run -->
-## CARD — engineering review · 2026-06-25T00:00:00Z (delta re-audit r2)
+## CARD — engineering review · 2026-07-03T00:00:00Z (fleet-const bugfix)
 **verdict** PASS with notes
 
-**Changed files** 9 (delta)
-modules/bookings/domain/availability.ts
-modules/bookings/domain/config.ts
-modules/bookings/application/getDayBoardUseCase.ts
-app/_containers/BoardTabsContainer/BoardTabsContainer.tsx (NEW)
+**Changed files** 3
+app/_components/AvailabilityHeader/AvailabilityHeader.tsx
 app/_components/DensityChart/DensityChart.tsx
+app/_components/UtilizationPanel/UtilizationPanel.tsx
 
 **Findings** none · none · 1 note
 
 ### architecture — architecture.md
 **Notes**
-- config.ts:45  `DENSITY_BUCKET_MIN_FINE` exported, no module importer (page uses inline literal) — defensible self-doc constant (§8)
+- app/_components/**  `FLEET = 6` now duplicated across 3 UI files + domain + schema — deliberate (app→domain boundary), documented, at the §9 three-use threshold. Awareness only. (§9)
 
 Everything else clean:
-- availability.ts — slot grid 5-min-aligned (`ceil(ms/step)*step`); `fits` single fit source; `nextOpening`/`reconcile`/`openSlots` one scan; R-AVAIL-3 `[start,end)` intact; pure (no Date.now). §3/§9 hold.
-- config.ts — removed OPERATING_DAY_*/operatingWindow* exports have zero orphan refs; `floorToHour`/`ceilToHour` pure (§8 clean).
-- getDayBoardUseCase.ts — shell thin; window derived via min/max + pure hour helpers; empty case 1-min stub guards div-by-zero; not smuggled policy (§6.7).
-- BoardTabsContainer.tsx — only new client comp; ARIA tabs correct (tablist/tab/tabpanel, aria-selected, roving tabIndex); panels passed as ReactNode children stay server comps.
-- BookingFormPanel / BookingFormContainer — no hooks in panel; no fit math in UI; slim container, single child call; labels on all inputs.
-- DensityChart / UtilizationPanel — server comps; window-aware empty states; semantic tokens; inline style only for data-driven chart geometry (allowed).
+- §8 no half-finished work — this diff COMPLETES the 8→6 migration (DEC-P10); domain FLEET_SIZE=6 and schema quantity 1..6 already updated, these 3 lagging UI constants were the tail. Closes the gap, adds none.
+- §10 code is communication — each `const FLEET = 6` carries a why-comment (DEC-P10 source + app→domain boundary rationale). Stale JSDoc/comments corrected in lockstep; no stale headers remain.
+- react-components §4 — all three pure `_components/`: props → JSX, zero hooks, no state.
+- server-first-react — all three Server Components; no `'use client'`, no client surface added.
+- frankie-rules §2.1/§5/§6 — no JSX/styling/props changed; `aria-label` strings embedding `${FLEET}` now correctly announce "od 6"; a11y fixed alongside visual. Semantic tokens/HTML intact.
+- project-structure §4 / ddd §3 — components import only `domain/types` (public); correctly do NOT import `domain/config`. One-way boundary respected.
 
 <!-- /AUTO:CARD -->
 
@@ -358,21 +356,20 @@ Round 2 (5-min slot grid, timeboxed density/utilization, Gustoća-tab split, pri
 2026-06-25  auditor  engineering review  WARN  Sacred core + use cases + actions + page clean; 2 concerns (orphan HistoryToggle, unnecessary double-cast), reconcile fleet-variant duplication noted.
 2026-06-25  auditor  delta re-audit  PASS  All prior concerns/notes remediated (orphan deleted, double-cast collapsed, fleet-variant duplicates folded into fits/openSlots); new reconcile delay fix clean — pure, type-safe, capacity_drop unaffected, minimality preserved.
 2026-06-25  auditor  delta re-audit r2  PASS with notes  5-min slot grid + timeboxed density/util + Gustoća-tab UI all clean; sole note: DENSITY_BUCKET_MIN_FINE exported but unimported (defensible self-doc constant, §8).
+2026-07-03  auditor  engineering review  PASS with notes  Fleet-const bugfix: 3 UI files FLEET 8→6 + stale comments corrected; completes DEC-P10 8→6 migration tail (§8). Pure server components, boundary respected. Sole note: FLEET now duplicated across 3 UI files (deliberate, at §9 threshold).
 
 <!-- /AUTO:WORKLOG -->
 
 <!-- AUTO:VERDICT — overwritten by the auditor on every run -->
 ## Verdict
-**PASS with notes** · 2026-06-25T00:00:00Z (delta re-audit r2)
+**PASS with notes** · 2026-07-03T00:00:00Z (fleet-const bugfix)
 
-This round's three changes — the 5-minute-aligned slot finder, the timeboxed density/utilization window, and the Gustoća-tab UI split — are all architecturally sound. The sacred core holds and is, if anything, tighter. `openSlots` now generates candidates on a uniform 5-min epoch-ms grid (`Math.ceil(fromMs/stepMs)*stepMs`, bounded by `latestStartMs` and `maxResults`), but `fits` is still the single fit oracle: `openSlots` calls `fits`, `nextOpening` delegates to `openSlots`, and `reconcile` calls both — one boundary-scan implementation, no duplicated math (DEC-A/DEC-P9, architecture §3/§9). R-AVAIL-3 half-open `[start, end)` semantics survive in `commitmentAt` (`startTime <= t && t < endTime`). Purity intact — no `Date.now()`, no `await`, no `console.log` in any domain function; `now`/`fleet`/window all passed in. `utilizationReport`'s narrowed `(records, windowStart, windowEnd, fleet)` signature is clean, with record windows clipped to the window via `overlapMinutes`.
+This diff fixes the operator-reported "6/8 slobodnih" bug by changing the local display constant `FLEET` from 8 to 6 in the three lagging presentational components (`AvailabilityHeader`, `DensityChart`, `UtilizationPanel`) and correcting their now-stale comments and JSDoc in lockstep. It is the textbook shape of an architecture.md §8 remediation, not a §8 violation: the domain single source of truth (`FLEET_SIZE = 6` in `modules/bookings/domain/config.ts`) and the DB schema (`quantity 1..6`) were already migrated under DEC-P10; these UI constants were the untracked tail of that migration. The change closes the gap and introduces no new half-finished state — no stubs, no dead exports, no half-migrated split. The `aria-label` strings that interpolate `${FLEET}` ("od 6 skutera") are corrected as a side effect, so the accessibility announcement is fixed alongside the visible number.
 
-`getDayBoardUseCase` derives the timeboxed window from confirmed reservations (`kind==='reservation' && status!=='cancelled'`) via min/max reductions plus the pure `floorToHour`/`ceilToHour` helpers, and guards the empty case with a 1-minute stub window against divide-by-zero. This is data-shaping, not smuggled policy — the fit/commitment/density/utilization math all stays in `domain/availability.ts` (donnie-rules §6.7, DEC-P9). The shell remains thin; the only object it constructs is the `DayBoard` result, which is its job.
+The components are exemplary against §10 (code is communication): every `const FLEET = 6` is paired with a comment naming the value's provenance (DEC-P10, 2026-07-03) and — more valuably — *why* it is a local constant rather than an import (`not imported from domain/config (app→domain boundary)`). That answers the reviewer's first question before it is asked. All three files remain pure Server Components under `_components/`: props → JSX, no hooks, no `'use client'`, no client surface added (react-components §4, server-first-react). They import only `@/modules/bookings/domain/types` (public surface) and correctly avoid importing `domain/config`, honoring the one-way app→domain boundary (project-structure §4, ddd-architecture §3). No JSX, styling, props, or calculation logic changed, so frankie-rules §2.1/§5/§6 are untouched — semantic tokens, semantic HTML, and `<Link>`-based navigation all remain intact.
 
-On the UI side, `BoardTabsContainer` is the only new client component and it earns the directive: ephemeral tab state via `useState`, a slim state proxy that delegates rendering, correct ARIA tabs (role tablist/tab/tabpanel, `aria-selected`, `aria-controls`, roving `tabIndex`, `focus-visible:ring`). The server-rendered `rasporedPanel`/`gustocaPanel` are passed in as `ReactNode` children, so they stay server components — minimum client surface preserved (server-first-react §4). `BookingFormPanel` is pure (no hooks, no fit logic, every input labelled); `BookingFormContainer` extracts an inner component so hooks aren't called conditionally past its past-day `return null`, and delegates all rendering through a single child call. `DensityChart`/`UtilizationPanel` are server components with window-aware empty states and semantic tokens only; their inline `style` is data-driven chart geometry (runtime percentages that cannot be a static token), which is the legitimate exception to frankie-rules §2.1, not an arbitrary-value violation.
+One note for awareness, not action: `FLEET = 6` now lives as a literal in three UI files in addition to the domain SSoT and the schema, so the next fleet change touches five sites. This is a deliberate trade to respect the import boundary (documented in each file) and sits exactly at architecture.md §9's three-concrete-uses threshold — the point at which an abstraction *may* be justified but is not yet required. It does not rise to a concern for this diff, which reduces divergence rather than adding it. If the fleet size proves volatile, a future change-unit could introduce a single presentational constant (e.g., a shared UI display constant fed from a server component prop) — an orchestrator/frankie decision, out of scope here.
 
-One note, surfaced for awareness, not action: `config.ts:45` exports `DENSITY_BUCKET_MIN_FINE` with no module-level importer — `app/page.tsx` uses an inline `5` literal across the app→domain boundary and references the constant only by name in a comment. Strictly read, architecture §8 prefers every export to have an in-repo consumer; here it is a defensible self-documenting domain constant paired with its imported sibling `DENSITY_BUCKET_MIN_DEFAULT`, so it stays a low note rather than a dead-code finding. Removed config exports (`OPERATING_DAY_*`, `operatingWindow*`) leave zero orphan references — §8 clean otherwise.
-
-No violations, no concerns. The two dev-script unused-var warnings in `infra/dev-seed.mjs` are out of rule scope (cosmetic, dev-only). Ship-ready from an architectural standpoint; functional verification was completed separately by the orchestrator.
+No violations, no concerns. Ship-ready from an architectural standpoint.
 
 <!-- /AUTO:VERDICT -->
