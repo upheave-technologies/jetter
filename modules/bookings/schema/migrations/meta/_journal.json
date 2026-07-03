@@ -15,6 +15,20 @@
       "when": 1783082563139,
       "tag": "0001_bitter_magneto",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783102313772,
+      "tag": "0002_perpetual_dreaming_celestial",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783102342877,
+      "tag": "0003_audit_events_immutability_trigger",
+      "breakpoints": true
     }
   ]
 }

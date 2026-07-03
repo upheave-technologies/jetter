@@ -31,28 +31,44 @@ updated: 2026-07-03
 ## CARD
 
 ## CARD — engineering review · 2026-07-03T00:00:00Z
-**verdict** PASS with notes
+**verdict** WARN
 
-**Changed files** 3
-scripts/migrate-deploy.mjs
+**Changed files** 5
+drizzle.config.ts
 package.json
-infra/README.md
+modules/bookings/schema/migrations/0002_perpetual_dreaming_celestial.sql
+modules/bookings/schema/migrations/0003_audit_events_immutability_trigger.sql
+modules/bookings/schema/migrations/meta/_journal.json
 
-**Findings** 0 violations · 0 concerns · 2 notes
+**Findings** 0 violations · 2 concerns · 2 notes
 
-Both prior WARN concerns are genuinely resolved. Prod+missing-direct → FATAL
-exit 1, no pooled fallback (L160-170). Per-set 120s timeout → fail-closed,
-names the set, aborts before the next set (L207-229). Every branch traced:
-prod+direct→migrate; preview/dev/unset-VERCEL_ENV→skip exit0; non-Vercel→
-prefer-direct-else-DATABASE_URL, fatal iff both empty; set-1 fail→exit before
-set-2. No secret value is ever logged (§2). Child-only DATABASE_URL assignment
-does not clobber app runtime pooled url (separate process). Idempotency intact
-(drizzle-kit journal; no bespoke state). No dead code / premature abstraction.
+Live-DB safety is CONFIRMED and this consolidation correctly fixes the
+silently-skipped-audit bug. Bookings 0000/0001 timestamps are byte-identical to
+HEAD (unchanged) and <= the live watermark (1783082563139) so they are SKIPPED —
+0001's `ALTER TABLE bookings DROP/ADD CONSTRAINT` will NOT re-run. Audit 0002
+(1783102313772) and 0003 (1783102342877) are both strictly > watermark so they
+DO apply. Journal is strictly ascending. Snapshot chain unbroken
+(0000→0001 5162c73e →0002 19cf1a13 →0003 400ad053). DDL is byte-identical to the
+retired proven audit SQL (verified against git HEAD). Audit table matches the
+schema barrel exactly (10 cols, 2 enums, 2 indexes, DESC expression index).
+Two WARN concerns are operational, not blocking a go: unconditional migrate in
+`vercel-build` (lost production-only guard) and stale infra/README.md.
 
 ### architecture — architecture.md
+**Concerns**
+- package.json:8  `vercel-build` runs `drizzle-kit migrate` unconditionally; the deleted runner's `VERCEL_ENV==='production'` guard is gone — a preview build resolving NEON_DIRECT/DATABASE_URL to prod would migrate prod (§2 trust boundary, §15 blast radius)
+- infra/README.md:193,208,213,251  documents the deleted migrate-deploy.mjs, deleted db:migrate:deploy script, and a production-only guard the code no longer has — misleading, not merely stale (§8 no half-finished work, §13 maintainability)
+
 **Notes**
-- scripts/migrate-deploy.mjs:210  spawnSync default SIGTERM kill on timeout; if a grandchild ignores it, parent still reports result.signal/ETIMEDOUT so fail-closed holds — surfaced for awareness (§11)
-- scripts/migrate-deploy.mjs:210  `env: process.env` forwards full build env to the child (required for DATABASE_URL); stdio inherit does not echo env, no leak — note only (§2)
+- drizzle.config.ts:62  `NEON_DIRECT_DATABASE_URL ?? DATABASE_URL!` fallback is sane for migrate (needs non-pooled); the pooled-url risk only bites if the direct var is unset on Neon — awareness (§11)
+- package.json:14  `db:migrate` still `drizzle-kit migrate` (manual/local) — correct, no dangling ref to deleted scripts
+
+### archie's rules — archie-rules.md
+No violations. audit_events §2.IX/§3 deletions (no updated_at/deleted_at) are the
+documented DEC-AU2 immutability exception; 0002/0003 are drizzle-generated +
+one --custom trigger slot (not hand-edited generated SQL, §5); enums are pgEnum
+(§2.V); entity_id is a soft link with no cross-module FK (§2.IV); indexes match
+§2.VI/§2.VII. Migrations are additive CREATE-only (no destructive step, §5).
 
 <!-- /AUTO:CARD -->
 
@@ -145,41 +161,80 @@ This change-unit adds a **migrate-on-deploy** step: a script that applies **both
 - MOD `scripts/migrate-deploy.mjs` — per-set fail-closed migrate timeout added (part of this hardening; DEC-MD11). A `MIGRATE_TIMEOUT_MS = 120_000` (120s) constant bounds each drizzle-kit `migrate` child (`spawnSync(..., { timeout: MIGRATE_TIMEOUT_MS })`). On timeout the child is killed and detected via `result.error?.code === 'ETIMEDOUT'` / `result.signal != null`; the runner logs a FATAL message naming the timed-out set (bookings/audit) and `process.exit(1)`, so remaining sets are NOT applied and the Vercel build fails (nothing promoted). A stall (e.g. the pooled url pgbouncer hangs, a wrong host, a network black hole) now fails fast instead of hanging to the outer build timeout with no attribution.
 - Note: this re-sync reflects the shipped hardening. Fail-closed is delivered by four mechanisms: the `&&` chain in `vercel-build`, the production-only guard, the fatal-missing-direct-url pre-flight check, and the per-set 120s migrate timeout (DEC-MD11).
 
+### 2026-07-03 — consolidate to ONE drizzle config + ONE migrations dir + `drizzle-kit migrate` in the build (DEC-MD12; reverses DEC-MD1's two-config posture)
+
+- **DEC-MD12 — ONE migration setup; the two-config design is retired.** Reverses the two-config posture of DEC-MD1 / DEC-MD8 (which kept `drizzle.config.ts` and `drizzle.audit.config.ts` separate "to preserve module isolation"). Root cause found: both configs shared drizzle-kit's DEFAULT bookkeeping table `drizzle.__drizzle_migrations`, and drizzle-orm 0.36's pg migrator gates on a SINGLE WATERMARK (apply iff a migration's journal `when` > MAX(created_at) in the bookkeeping table), NOT per-hash. Because the audit journal's timestamps (1782995710435 / 1782995732074) predate the bookings watermark (1783082563139), the audit set was seen as already-applied and SILENTLY SKIPPED on every deploy — `audit_events` never created on live, while the log said "migrations applied successfully". _Fix:_ collapse to ONE config with array-form `schema` covering both barrels, ONE `out` dir (the existing bookings dir — lower risk than relocating the proven snapshot chain), ONE journal, ONE default watermark. `vercel-build` = `drizzle-kit migrate && next build`. _Rejected:_ giving audit its own bookkeeping table (the prior in-flight fix — more moving parts than the user wants; "stop complicating it"); relocating everything to a neutral `./drizzle/migrations` (needs re-linking the proven snapshot chain — higher risk). _Note on module isolation (ddd-architecture §2):_ that axiom is about not importing across core packages and not declaring cross-module FKs — NOT about physical migration-file layout. There is no cross-module FK here (audit `entity_id` is a soft link, archie-rules §2.IV); the two tables share one Postgres DB on one connection regardless. One journal for one app's two tables does not violate isolation. _Supersedes:_ DEC-MD1 (one runner both sets → now one `migrate`, no runner), DEC-MD8's "no merging of the two configs" scope line, DEC-MD11 (per-set timeout in the deleted runner — mooted). DEC-MD7 (production-only) is NOT preserved by the bare `drizzle-kit migrate`; preview implication surfaced to the human for decision (see Report §7).
+- ADD `modules/bookings/schema/migrations/0002_perpetual_dreaming_celestial.sql` — generated by `drizzle-kit generate` off the unified (bookings+audit) schema; creates `audit_events` + `audit_action`/`audit_entity_type` enums + 2 indexes. Byte-identical to the retired proven audit `0000_modern_the_enforcers.sql`. `when`=1783102313772 (> live watermark → applies on live).
+- ADD `modules/bookings/schema/migrations/0003_audit_events_immutability_trigger.sql` — `--custom` migration (triggers are not expressible in the Drizzle DSL; archie-rules §5). SQL body byte-identical to the retired proven audit `0001_audit_events_immutability_trigger.sql` (reject function + no_update/no_delete/no_truncate triggers). `when`=1783102342877.
+- ADD `modules/bookings/schema/migrations/meta/{0002,0003}_snapshot.json` + MOD `meta/_journal.json` — unified 4-entry journal (0000/0001 bookings unchanged, 0002/0003 audit appended); snapshot `prevId` chain intact; re-running `generate` is a clean no-op ("No schema changes").
+- MOD `drizzle.config.ts` — array-form `schema` (both barrels), `out` = existing bookings dir, `dbCredentials.url` = `NEON_DIRECT_DATABASE_URL ?? DATABASE_URL`, no custom `migrations` table (single default watermark is correct for one set).
+- MOD `package.json` — `vercel-build` = `drizzle-kit migrate && next build`; removed `db:generate:audit`, `db:migrate:audit`, `db:migrate:deploy`; kept `db:generate` / `db:migrate`.
+- DEL `drizzle.audit.config.ts`, `modules/audit/schema/migrations/**`, `scripts/migrate-deploy.mjs` — the audit SQL is folded into the unified dir (verified identical before deletion); the 240-line runner is replaced by a bare `drizzle-kit migrate`. The audit **schema** files (`modules/audit/schema/{auditEvents,enums,index}.ts`) are UNTOUCHED.
+- Verified: `pnpm tsc --noEmit` clean; unified journal ascending with both audit `when` > 1783082563139; audit DDL byte-identical to the proven SQL; `drizzle-kit generate` re-run reports no drift.
+
 <!-- AUTO:WORKLOG — appended (never overwritten) by the auditor on every run -->
 ## Worklog
 
 2026-07-03T00:00:00Z  auditor  engineering review  PASS with notes  hardening re-review: both prior WARN concerns (fatal-missing-direct-url, per-set timeout) resolved; no regression; 2 awareness notes
+2026-07-03T00:00:00Z  auditor  engineering review  WARN  DEC-MD12 consolidation: live-DB safety CONFIRMED (bookings skip, audit apply, chain intact, DDL identical); 2 concerns — lost prod-only guard in vercel-build, stale infra/README
 
 <!-- /AUTO:WORKLOG -->
 
 <!-- AUTO:VERDICT — overwritten by the auditor on every run -->
 ## Verdict
-**PASS with notes** · 2026-07-03T00:00:00Z
+**WARN** · 2026-07-03T00:00:00Z
 
-The hardening pass resolves both prior WARN concerns. A production Vercel build
-with `NEON_DIRECT_DATABASE_URL` unset/empty now aborts fatally (exit 1) before
-touching either migration set, with no silent fallback to the pooled
-`DATABASE_URL` (which pgbouncer would hang) — DEC-MD9. Each `drizzle-kit migrate`
-child is bounded by a 120s per-set timeout; on expiry the child is killed and
-detected (`result.error?.code === 'ETIMEDOUT' || result.signal != null`), the
-runner logs a FATAL naming the set, and exits 1 so remaining sets are not
-applied — DEC-MD11. Every control-flow branch was traced and is fail-closed:
-prod+missing-direct→exit1; prod+direct→migrate; preview/dev/unset→skip exit0;
-non-Vercel→prefer-direct-else-DATABASE_URL, fatal iff both empty; set-1
-fail→exit before set-2; timeout→exit1 naming the set. No connection-string value
-is ever logged (architecture.md §2). The child-only `process.env.DATABASE_URL`
-assignment runs in a separate build process and does not clobber the app's
-runtime pooled url. Idempotency is intact — no bespoke state, drizzle-kit's
-journal alone. The SPEC is now accurate to the shipped Vercel-native reality
-(SPEC-drift note resolved). No regression, no dead code, no premature
-abstraction introduced by the hardening.
+The DEC-MD12 consolidation is architecturally sound and, on the load-bearing
+question, SAFE to run against the live DB. The single-watermark bug is fixed
+structurally: one config, one journal, one default bookkeeping table. Verified
+directly against the files — bookings 0000 (when=1782826863397) and 0001
+(when=1783082563139) are byte-identical to git HEAD and both <= the live
+watermark 1783082563139, so drizzle's pg migrator SKIPS them; 0001's
+`ALTER TABLE bookings DROP CONSTRAINT ... ADD CONSTRAINT` (the 1..8→1..6 quantity
+tighten) will NOT re-run. Audit 0002 (1783102313772) and 0003 (1783102342877)
+are both strictly greater, so they apply and finally create `audit_events` on
+live. Journal is strictly ascending; snapshot prevId chain is unbroken
+(0001 id 5162c73e → 0002 prevId 5162c73e / id 19cf1a13 → 0003 prevId 19cf1a13).
+0002 SQL is byte-identical to the retired audit 0000; 0003 is byte-identical to
+the retired audit 0001 (only the comment cross-refs 0000→0002 / 0001→0003 were
+updated). The generated table matches the schema barrel exactly: 10 columns with
+matching types/defaults, both pgEnums with matching value lists, both indexes
+with matching names including the DESC expression index. No DDL was lost in the
+fold; no cross-module FK; the §2.IX/§3 (no updated_at/deleted_at) deviation is
+the documented DEC-AU2 immutability exception; the trigger DDL lives in its own
+--custom slot rather than a hand-edit of generated SQL (archie-rules §5). The
+unified config's array-form schema is valid for drizzle-kit 0.28, `out` points
+at the dir holding all four migrations, and the direct-URL-first fallback is the
+correct choice for migrate on Neon. package.json has no dangling references to
+the deleted scripts.
 
-Two notes are surfaced for awareness only (not blocking): the default-SIGTERM
-timeout kill is robust because parent-side detection fires regardless of a
-grandchild ignoring the signal; and `env: process.env` forwards the full build
-environment to the child, which is required for `DATABASE_URL` and leaks nothing
-via inherited stdio. Neither warrants a change.
+GO / NO-GO: GO for deploying this against the live DB, on the migration mechanics
+alone. The two WARN concerns are operational, not correctness blockers, and the
+human should weigh them before the first production build:
 
-The prior WARN is RESOLVED. Nothing blocks. No remediation needed.
+1. Preview-deploy exposure (package.json:8). `vercel-build` now runs
+   `drizzle-kit migrate` UNCONDITIONALLY. The deleted runner had a
+   `VERCEL_ENV==='production'` guard; it is gone. If a non-production Vercel build
+   has `NEON_DIRECT_DATABASE_URL` (or `DATABASE_URL`) resolving to the production
+   database, that preview build will migrate production. Whether this is a real
+   exposure depends entirely on how Vercel env vars are scoped per environment —
+   if the direct URL is set only on the Production environment, previews get an
+   empty/undefined url and `drizzle-kit migrate` fails the build harmlessly. The
+   human should confirm the Vercel env scoping OR add a minimal guard (e.g.
+   `[ \"$VERCEL_ENV\" = production ] && drizzle-kit migrate; next build`, or a
+   one-line pre-flight). Flagged per instruction 7; the human decides.
+
+2. Stale/misleading docs (infra/README.md:193,208,213,251). The README still
+   documents the deleted `scripts/migrate-deploy.mjs`, the deleted
+   `db:migrate:deploy` npm script, the retired two-config design, AND a
+   production-only guard the shipped `vercel-build` no longer implements. This is
+   worse than stale — it describes a safety property the code lacks, which could
+   give an operator false confidence about concern #1. Owner: infra, to re-sync
+   the README to the DEC-MD12 reality.
+
+Remediation, if the human wants to clear the WARN before deploy: infra owns both
+items — add the production-only guard to `vercel-build` (or confirm+document the
+Vercel env scoping that makes it unnecessary), and re-sync infra/README.md.
+Neither touches the migration files, whose correctness is confirmed.
 
 <!-- /AUTO:VERDICT -->

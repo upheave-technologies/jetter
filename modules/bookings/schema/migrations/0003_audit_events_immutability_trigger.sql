@@ -25,15 +25,16 @@
 -- WHY A SEPARATE CUSTOM MIGRATION (archie-rules §5):
 --   Triggers are not expressible in the Drizzle schema DSL, so drizzle-kit
 --   `generate` cannot emit them and would never reproduce a hand-edit of the
---   generated 0000 table SQL. Hand-editing generated SQL is forbidden (§5) —
---   the next `generate` would not know about the edit. Instead this lives in its
---   own `--custom` migration slot (0001), registered in meta/_journal.json, so
---   `drizzle-kit migrate` applies it right after the 0000 CREATE TABLE and the
+--   generated table SQL. Hand-editing generated SQL is forbidden (§5) — the next
+--   `generate` would not know about the edit. Instead this lives in its own
+--   `--custom` migration slot, registered in meta/_journal.json, so
+--   `drizzle-kit migrate` applies it right after the 0002 CREATE TABLE and the
 --   migration history stays regeneratable.
 --
--- SEQUENCING: 0000 creates the table; 0001 (this file) attaches the guard. The
--- function/triggers are created idempotently (CREATE OR REPLACE / DROP IF EXISTS
--- then CREATE) so re-running the migration is safe (architecture.md §6).
+-- SEQUENCING: 0002 (0002_perpetual_dreaming_celestial) creates audit_events;
+-- 0003 (this file) attaches the guard. The function/triggers are created
+-- idempotently (CREATE OR REPLACE / DROP IF EXISTS then CREATE) so re-running the
+-- migration is safe (architecture.md §6).
 --
 -- CORRECTIONS ARE NOT UPDATES: a correction is itself a NEW appended event
 -- (DEC-AU2). This guard therefore never obstructs the intended write path.

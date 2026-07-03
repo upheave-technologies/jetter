@@ -187,10 +187,12 @@ that triggers the workflow).
 
 ### 3. Run migrations against Neon as a deploy step
 
-jet has **two** independent drizzle-kit migration sets — `bookings`
-(`drizzle.config.ts`) and `audit` (`drizzle.audit.config.ts`) — and **both**
-must be applied on every deploy. They are wrapped in one fail-closed runner,
-`scripts/migrate-deploy.mjs`, exposed as `pnpm db:migrate:deploy`:
+jet has **one** drizzle-kit config (`drizzle.config.ts`) covering **both**
+schemas — `bookings` and `audit` — via a `schema` array, with a single
+migrations directory at `modules/bookings/schema/migrations/` (bookings
+`0000`/`0001` + audit `0002`/`0003`). A single `drizzle-kit migrate` applies the
+whole history. It is wired into the Vercel build via a production-only,
+fail-closed `vercel-build` guard (below):
 
 > **⚠️ Deploys are done by Vercel's NATIVE Git integration, NOT GitHub Actions.**
 > The GitHub Actions workflow that used to run migrations-on-deploy is **DISABLED**
@@ -205,38 +207,31 @@ must be applied on every deploy. They are wrapped in one fail-closed runner,
   `package.json` defines a `vercel-build` script — Vercel runs `vercel-build` in
   preference to `build` when present:
   ```json
-  "vercel-build": "node scripts/migrate-deploy.mjs && next build"
+  "vercel-build": "if [ \"$VERCEL_ENV\" = production ]; then drizzle-kit migrate || exit 1; fi && next build"
   ```
-  Migrations run **first**, then `next build`. Because the two are chained with
-  `&&`, a failed migration aborts the build and **nothing is promoted**
-  (fail-closed, the same contract the disabled workflow had — the app is never
-  pointed at a half-migrated database). `scripts/migrate-deploy.mjs` enforces two
-  guards:
-  - **Production-only.** It migrates **iff** `VERCEL_ENV === 'production'`.
-    Preview and development builds log a one-line skip and proceed straight to
-    the build. Rationale: with the old workflow disabled there is no longer any
-    Neon branch-per-PR automation, so a preview build has no per-preview branch
-    DB to target and must never migrate the production database. (Invoked outside
-    a Vercel build — `VERCEL` unset — the guard is inert, so manual/CI runs
-    behave exactly as before.)
-  - **DIRECT url, not pooled — REQUIRED on a production build.** It uses
-    `NEON_DIRECT_DATABASE_URL` (the Neon **DIRECT**, non-`-pooler` url) and injects
-    it as `DATABASE_URL` for the child `drizzle-kit` processes only — it does
-    **not** overwrite the app's runtime pooled `DATABASE_URL`. drizzle-kit migrate
-    opens a long multi-statement session that pgbouncer transaction pooling
-    breaks, so migrations need the direct url while the running app keeps the
-    pooled one. On a **production** Vercel build (`VERCEL_ENV === 'production'`)
-    this var is **mandatory**: if it is unset/empty the build **fails fast**
-    (`exit 1`, nothing promoted) rather than silently falling back to the pooled
-    `DATABASE_URL` — because the pooled url would hang `drizzle-kit migrate`. Set
-    it as a Vercel Production env var (step 3a). Outside a production build
-    (manual/CI, or Vercel preview/dev which skip), the previous behavior is
-    unchanged: prefer `NEON_DIRECT_DATABASE_URL` if present, else use `DATABASE_URL`.
-  - **Timeout, fail-closed.** Each `drizzle-kit migrate` child is bounded by a
-    120 s timeout. A stall (misconfig, wrong host, network black hole, a wedged
-    pooled session) is killed and treated as a failure — the build aborts with a
-    message naming the failing set (`bookings`/`audit`) instead of hanging until
-    Vercel's outer build timeout.
+  The guard lives inline in the one-liner — there is no wrapper script. Walking
+  the three cases:
+  - **Production-only.** The `if [ "$VERCEL_ENV" = production ]` test gates the
+    migrate. On a **production** build the `then` branch runs `drizzle-kit
+    migrate`. On **preview/development** builds the test is false, the `if` block
+    runs nothing and exits `0`, so `&& next build` proceeds — build only,
+    migration skipped. Rationale: there is no longer any Neon branch-per-PR
+    automation, so a preview build has no per-preview branch DB to target and
+    must never migrate the production database.
+  - **Fail-closed.** On a production build, `drizzle-kit migrate || exit 1` means
+    a failed migration triggers `exit 1`, which aborts the entire
+    `vercel-build` process — `next build` never runs and **nothing is promoted**
+    (the app is never pointed at a half-migrated database). On success, `migrate`
+    returns `0`, the `if...fi` exits `0`, and `&& next build` runs. This is the
+    same fail-closed contract the disabled workflow had.
+  - **DIRECT url, not pooled — REQUIRED for migrate to work.** `drizzle.config.ts`
+    reads `NEON_DIRECT_DATABASE_URL ?? DATABASE_URL`, so `drizzle-kit migrate`
+    uses the Neon **DIRECT** (non-`-pooler`) url when it's set. drizzle-kit
+    migrate opens a long multi-statement session that pgbouncer transaction
+    pooling breaks, so migrations need the direct url while the running app keeps
+    the **pooled** `DATABASE_URL`. On a production Vercel build you must set
+    `NEON_DIRECT_DATABASE_URL` (step 3a) — if only the pooled `DATABASE_URL` is
+    present, `drizzle-kit migrate` will hang against the pooler.
 
   You must set `NEON_DIRECT_DATABASE_URL` as a Vercel **Production** environment
   variable (the Neon MAIN branch **direct**, non-pooled url,
@@ -247,29 +242,30 @@ must be applied on every deploy. They are wrapped in one fail-closed runner,
 
 - **One-off from your machine** (emergency / manual deploy):
   ```bash
-  DATABASE_URL="postgres://USER:PASSWORD@ep-xxxx.REGION.aws.neon.tech/DB?sslmode=require" \
-    pnpm db:migrate:deploy
+  NEON_DIRECT_DATABASE_URL="postgres://USER:PASSWORD@ep-xxxx.REGION.aws.neon.tech/DB?sslmode=require" \
+    pnpm db:migrate
   ```
-  Runs bookings then audit, aborting on the first failure. `VERCEL` is unset
-  here, so the production-only guard does not apply — it migrates whatever
-  `DATABASE_URL` (or `NEON_DIRECT_DATABASE_URL`, if you prefer to set that) points
-  at. Use the *direct* host (no `-pooler`) for migrations; the *pooled* host is
-  for the running app.
+  A single `drizzle-kit migrate` applies the whole history (bookings + audit).
+  The production-only `vercel-build` guard does not apply here — you're invoking
+  `db:migrate` directly. Use the *direct* host (no `-pooler`) for migrations; the
+  *pooled* host is for the running app.
 
 Migrations are applied with the **direct** (non-pooled) URL — pgbouncer's
 transaction pooling can interfere with the migration session. Idempotency is
-free: `drizzle-kit migrate` tracks applied migrations per journal, so re-running
-a deploy with no new migration files is a no-op for both sets — every re-deploy
+free: `drizzle-kit migrate` tracks applied migrations in its journal, so
+re-running a deploy with no new migration files is a no-op — every re-deploy
 runs the migrate step and, when there is nothing new, does nothing.
 
 ### 3a. Set `NEON_DIRECT_DATABASE_URL` on Vercel (Production)  ← REQUIRED for the above
 
-The `vercel-build` migrate step reads `NEON_DIRECT_DATABASE_URL`. On a
-**production** deploy this variable is **required** — if it is missing/empty the
-build fails fast (`exit 1`) and nothing is promoted; the step never falls back to
-the pooled `DATABASE_URL` (which would hang `drizzle-kit migrate`). Set it as a
-Vercel **Production**-scoped environment variable, holding the Neon MAIN branch
-**DIRECT** (non-pooled) connection string:
+The `vercel-build` migrate step runs `drizzle-kit migrate`, and
+`drizzle.config.ts` resolves its connection as `NEON_DIRECT_DATABASE_URL ??
+DATABASE_URL`. On a **production** deploy this variable is **required** for
+migrate to work: if it is unset, `drizzle-kit migrate` falls back to the pooled
+`DATABASE_URL`, and pgbouncer's transaction pooling breaks migrate's long
+multi-statement session (it hangs, then the build aborts — fail-closed, nothing
+promoted). Set it as a Vercel **Production**-scoped environment variable, holding
+the Neon MAIN branch **DIRECT** (non-pooled) connection string:
 
 ```bash
 # You run this — the infra agent never sets Vercel env (infra-commandments §4).
@@ -356,8 +352,8 @@ infra/
 
 Dockerfile                     ← multi-stage; builder → runner (pure-JS pg, no native addon)
 .dockerignore                  ← keeps node_modules / secrets out of the build context
-modules/bookings/schema/migrations/   ← drizzle-kit migration history
-drizzle.config.ts              ← drizzle-kit config (dialect: postgresql)
+modules/bookings/schema/migrations/   ← single drizzle-kit migration history (bookings 0000/0001 + audit 0002/0003)
+drizzle.config.ts              ← single drizzle-kit config (dialect: postgresql; schema array covers bookings + audit)
 ```
 
 ---
