@@ -9,9 +9,9 @@
  * pattern BoardTabsContainer uses. Past BookingRow JSX stays on the server
  * (server-first-react §4).
  *
- * The board polls every 2 s via router.refresh(). useState survives
- * router.refresh(), so the toggle state persists across polls — no special
- * handling needed (DEC-TF3).
+ * Toggle state is local UI state that persists across the server-driven
+ * refreshes triggered by mutations (revalidateTag / revalidatePath). No special
+ * handling needed — useState survives a server refresh (DEC-TF3).
  */
 
 import { useState } from 'react';

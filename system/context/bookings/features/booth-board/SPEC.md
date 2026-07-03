@@ -15,72 +15,44 @@ module: bookings
 type: feature
 state: working
 created: 2026-06-06
-updated: 2026-06-09
+updated: 2026-07-03
 ---
 ---
 
 <!-- AUTO:CARD — overwritten by the auditor on every run -->
-## CARD — engineering review · 2026-06-09T14:30:00Z (T10 / DEC-F bugfix · narrow rename + recomputation)
-**verdict** PASS    (three-file targeted bugfix; every applicable rule clean; no findings introduced)
+## CARD — engineering review · 2026-07-03T00:00:00Z (remove 2s board polling · deletion + comment cleanup)
+**verdict** PASS with notes    (clean deletion; no orphaned code references; two documentation/cosmetic notes)
 
 **Changed files** 3
-modules/bookings/domain/types.ts
-modules/bookings/application/computeAvailabilityUseCase.ts
-app/_components/BookingFormFields/BookingFormFields.tsx
+app/_containers/BoardSyncContainer/BoardSyncContainer.tsx (deleted)
+app/_components/BoardView/BoardView.tsx
+app/_containers/ShowPastContainer/ShowPastContainer.tsx
 
-**Findings** none
+**Findings** 2 notes
 
-- No issues. The diff is a textbook narrow bugfix executing DEC-F: rename `AvailabilityVerdict.freeNow` → `freeAtSlot` on the `fits:true` arm, recompute the value from `FLEET_SIZE - peakCommitment(allBookings, startTime, endTime, now)` (the same function that already powers the fit-check at `domain/availability.ts:185`), repoint the single UI consumer. The "label lies" semantic mismatch is closed: the name now agrees with what the value computes, and the displayed count is consistent with the verdict's true semantics.
+- The 2-second polling leaf is fully removed. The `'use client'` file `BoardSyncContainer.tsx` and its directory are deleted; `BoardView.tsx` drops the import, the `<BoardSyncContainer />` mount, and both descriptive comments (the inline mount comment + the ASCII component-tree line); `ShowPastContainer.tsx` rewrites its stale "board polls every 2s" comment to describe the mutation-driven refresh model that is actually in force. `app/page.tsx` (`force-dynamic` + `revalidate = 0`) was intentionally left untouched.
 
-**Mechanical verification (T10/DEC-F scope · sacred invariants DEC-A through DEC-E held):**
-- `grep -rn "verdict.freeNow"` across `app/` + `modules/` + `lib/`: **ZERO hits.** No orphan reader of the renamed field; `tsc --noEmit` clean (orchestrator-confirmed) corroborates this — the rename surfaced any straggling consumer as a compile error, none existed.
-- `grep -rn "verdict.freeAtSlot"`: exactly one consumer — `app/_components/BookingFormFields/BookingFormFields.tsx:338`. Symmetric with the type definition.
-- `grep -rn "freeNow" modules/bookings/domain/types.ts`: only on `BoardSnapshot.freeNow` (line 137) — explicitly preserved per DEC-F scope ("scope is narrow"). The board header's "free right now" semantics are correct for that call site and untouched.
-- `grep -rn "freeNow as computeFreeNow"` in `modules/bookings/application/`: only `getBoardSnapshotUseCase.ts:19` — the board snapshot's "free right now" path correctly still uses the alias. `computeAvailabilityUseCase.ts` correctly dropped the alias (no longer used after the recomputation switch).
-- `grep -n "peakCommitment" modules/bookings/`: defined exclusively at `domain/availability.ts:134`; called from `domain/availability.ts:185` (inside `fits()`), `domain/availability.ts:328` (inside `atRiskUpcoming`), and now `application/computeAvailabilityUseCase.ts:111`. DEC-A sacred — the math lives in the domain layer; the application shell calls it; no duplication.
-- `getBoardSnapshotUseCase.ts` (the board header path) unchanged — `BoardSnapshot.freeNow` consumers (`AvailabilityHeader.tsx:5,23,32,34,39,41,60,65,85,105`) continue to receive the "free right now" semantic, as intended.
-- Capability sidecar (`computeAvailabilityUseCase.capability.ts`) unchanged: `query: true, effects: []`, input shape `{ quantity, startTime, durationMin }` unchanged. donnie-rules §7 satisfied without modification (input shape didn't change; only the output shape's field name + computation source did).
+**Mechanical verification:**
+- `grep -rn "BoardSyncContainer"` across code (`.ts`/`.tsx`): **zero code hits.** The only surviving reference is `system/context/bookings/features/booth-board/SPEC.md:294` (documentation — spec agent's territory, not code; see note below).
+- `grep -rn "router.refresh\|setInterval\|POLL_INTERVAL\|polls every\|2s polling"` across `app/`: **zero hits.** No stranded polling machinery, no orphaned timer, no dead comment referencing polling.
+- `BoardView` still consumed — imported and mounted at `app/page.tsx:33,90`. The removal did not strand the view export.
+- `ShowPastContainer.tsx:13` `revalidateTag / revalidatePath` reference is **comment-only** (verified — not a call inside the client component). The rewritten comment matches reality: `app/actions.ts` performs the actual `revalidateTag`/`revalidatePath` calls, and `page.tsx` is `force-dynamic` / `revalidate = 0`, so server data re-fetches after each mutation's revalidation. The claim that `useState` survives a server refresh (and the toggle persists) is correct.
 
 ### architecture — architecture.md
-- No issues. §3 pure core / imperative shell: the recomputation routes through `peakCommitment` — a pure domain function with explicit `now` parameter, side-effect-free, deterministic. The application shell at `computeAvailabilityUseCase.ts:111` is one line — `const freeAtSlot = FLEET_SIZE - peakCommitment(allBookings, input.startTime, endTime, now)` — pure dispatch, zero inline policy. §8 no half-finished work: the rename is complete; `tsc --noEmit` confirms no orphan consumers; the dropped `freeNow as computeFreeNow` import is removed (no dead imports); inline + file-header JSDoc updated to match the new semantics (no stale "Algorithm:" headers). §10 code is communication: `freeAtSlot` names what it is — "free skis during the requested slot" — replacing the misleading `freeNow` which named the wrong question. The JSDoc at `types.ts:109-113` explicitly disambiguates ("NOT 'free right now'") and cites DEC-F as the rationale fossil. §14 debuggability: the name and the math now agree, eliminating the class of "the label lies" confusion the bug created. §16 high agency: the operator-reported bug is fixed at the root cause (the value being computed against the wrong window) rather than papered over at the UI layer.
-
-### project-structure — project-structure.md
-- No issues. No top-level directory changes. Imports across the three files stay within the allowed surface: `app/_components/BookingFormFields/BookingFormFields.tsx:2` imports `AvailabilityVerdict` from `@/modules/bookings/domain/types` (allowed per §4); `computeAvailabilityUseCase.ts` imports from sibling `../domain/types`, `../domain/availability`, `../domain/config`, `../domain/repository` (all internal to the bookings module, allowed). Dependency direction one-way: `app/` → `modules/bookings/`; never the reverse.
-
-### ddd-architecture — ddd-architecture.md
-- No issues. §1 layer cake: `BookingFormFields.tsx` (component) ← `BookingFormPanel`/`BookingEditPanel` (containers) ← `computeAvailabilityAction` (server action) ← `computeAvailabilityUseCase` (application) ← `domain/availability.peakCommitment` (domain). No layer skipped. §3 public API surface: the verdict's shape is exported from `domain/types.ts`; the consumer reads it via the allowed `domain/types` import path. §4 one use case per file: `computeAvailabilityUseCase.ts` continues to export exactly one factory and one pre-wired instance — no growth, no second use case smuggled in. Capability sidecar present and unchanged (correct — input shape unchanged).
+- No issues. §8 no half-finished work: this is a complete removal, not a half-migration — the deleted file, its directory, the import, the JSX mount, and every descriptive comment referencing it are gone in a single change-unit; no dead exports, no orphaned imports, no stale comment survives in code. §10 code is communication / §17 empathy for future maintainers: the `ShowPastContainer` comment was corrected rather than left lying — a stale comment claiming a behavior that no longer exists is the exact debt these mindsets forbid; the rewrite names the real refresh model (mutation-driven `revalidateTag`/`revalidatePath` over a `force-dynamic` page) and retains the DEC-TF3 rationale fossil.
 
 ### react-components — react-components.md
-- No issues. §2 forbidden imports: `BookingFormFields.tsx` imports only `lucide-react` (icons), `@/modules/bookings/domain/types` (type-only), `./croatian` (sibling helper), and `@/lib/time` (project-shared time util). No ORM, no fetch, no repository, no use case import. §4 component/container boundary: `BookingFormFields.tsx` stays a pure presentational `_components/` file — props → JSX, no hooks, no state. §5 hierarchy: the file is consumed by `BookingFormPanel` + `BookingEditPanel` (server `_components/`), each of which is mounted by its respective `_containers/` (`BookingFormContainer` + `BookingEditContainer`) — the documented "container = client leaf, view = server component" pattern.
+- No issues. §4 boundary: `BoardView.tsx` remains a pure presentational `_components/` server file — the edit only removed an import + a JSX node + comments; no hook was introduced, no `'use client'` added, still props → JSX. `ShowPastContainer.tsx` stays a legitimate slim `'use client'` state proxy (`useState` only, delegates all rendering to `ShowPastView`) — comment-only edit, behavior untouched. §2 forbidden imports: nothing added; the removed `BoardSyncContainer` import (and with it the last `useEffect` in the project) reduces surface, it does not add it.
 
 ### server-first-react — server-first-react.md
-- No issues. `BookingFormFields.tsx` remains a server component (no `'use client'` directive, no hooks). The one-line text swap on line 338 does not change the server-first posture. §3 decision tree: no useState/useEffect/event-handler/browser-API need was introduced — correct to leave as server component. §4 minimum client surface: no expansion of the client surface in this diff.
-
-### page-architecture — page-architecture.md
-- No findings (no page.tsx / layout.tsx / template.tsx files changed).
-
-### server-actions — server-actions.md
-- No findings (no actions.ts files changed). `computeAvailabilityAction` signature (the read-only query action) is unaffected by this change — its input contract `{ quantity, startTime, durationMin }` is unchanged; only the verdict's output shape narrows the `fits:true` arm's field name + recomputes its value.
-
-### donnie's rules — donnie-rules.md
-- No issues. §1 domain purity: `types.ts` is type-only (zero functions, zero imports from application/ or infrastructure/); `domain/availability.peakCommitment` is the existing pure function (no clock read inside, `now` passed in). §6.1 policy in pure functions: the recomputation extracts `FLEET_SIZE - peakCommitment(...)` — a one-line dispatch in the application shell; the math is pure-domain. §6.7 shell-to-core ratio: the use case body is a thin linear orchestration (validate → load → dispatch on `fits()` → return) — no shell bloat introduced. §6.11 no dead code: the previously-imported `freeNow as computeFreeNow` alias is correctly removed (it would otherwise become a TS6133); the `peakCommitment` import is added and consumed at line 111. §7 capability sidecar: present at `computeAvailabilityUseCase.capability.ts`, declares `query: true, effects: []`. Input shape unchanged, so no sidecar update was required — correct restraint.
-
-### nexus's rules — nexus-rules.md
-- No findings (no nexus-owned files changed — no actions.ts, no page.tsx, no middleware, no route handlers).
+- No issues. §4 minimum client surface: deleting the polling leaf strictly *reduces* shipped client JavaScript — the project's only `useEffect`-based client leaf is gone. This moves with the principle, not against it. `BoardView` remains server-first; `ShowPastContainer` remains the smallest necessary client leaf.
 
 ### frankie's rules — frankie-rules.md
-- No issues. §5 accessibility: the changed line at `BookingFormFields.tsx:338` is inside a container with `role="status"` + `aria-live="polite"` (unchanged) — live verdict updates are still announced to assistive tech. §2.1 semantic tokens only: still `bg-success` / `text-success-foreground` / `text-sm font-semibold` — no hardcoded colors, no arbitrary scale values introduced. The diff is purely a JSX expression rename (`verdict.freeNow` → `verdict.freeAtSlot`); zero structural, design-system, or a11y regression possible.
+- No issues. No design-system, accessibility, or performance surface touched — the change is a deletion plus two comment edits. No tokens, no images, no interactive controls added or altered. §3 file organization: the now-empty `BoardSyncContainer/` directory was removed alongside its file (no orphaned atomic folder left behind).
 
-### archie's rules — archie-rules.md
-- No findings (no schema changes in this pass).
-
-**Carryover (deferred, NOT introduced by this pass — surfaced for transparency only, unchanged from the 13:45 audit):**
-- frankie-rules §2.2 ternary class strings in BookingRow / BookingFormFields / BookingEditPanel / BookingFormPanel (CVA migration deferred — explicitly out of scope this pass).
-- frankie-rules §2.3 hand-rolled segmented controls (Radix ToggleGroup upgrade deferred).
-- architecture §9 JetterLogo single-caller extraction (deferred).
-- `IBookingRepository.findAll` surface still defined with zero callers (from the 2026-06-06 audit).
-- `lib/observability.ts` Turbopack workaround — pre-existing carryover; DEC-E formalizes `lib/` as the project-shared utility home alongside it.
-- `app/page.tsx` Promise.all([single]) micro-anticipation — pre-existing note, not introduced by this pass.
+**Notes (surfaced for the orchestrator — neither tilts the verdict past PASS-with-notes):**
+- `system/context/bookings/features/booth-board/SPEC.md:294` still describes `_containers/BoardSyncContainer.tsx` as a live `'use client'` polling leaf (M-2). This is documentation, not code — outside the auditor's remediation scope — but it is now stale. The orchestrator should dispatch `spec` to reconcile the SPEC with the removal (and note that the FSD §13 / M-2 "multi-device sync within ~2s" intent is no longer implemented, if that intent still stands).
+- `app/_components/BoardView/BoardView.tsx:117` — the removed JSX mount left a blank line between `<BoardTabsContainer />` and the closing `</div>`. Cosmetic only; the formatter normally clears it. Note-level.
 
 <!-- /AUTO:CARD -->
 
@@ -163,7 +135,7 @@ From FSD §17 — future enhancements, **deferred** (not in this change-unit):
 
 Additionally, **not in this change-unit** (implementation calls):
 - No authentication, no Principal, no tenant, no policy. The Nucleus `@core/auth`, `@core/identity`, `@core/iam` packages remain installed but are not used.
-- No realtime transport (WebSocket / SSE / Pusher). Sync is polling-based (see Decisions).
+- No realtime transport (WebSocket / SSE / Pusher). **No polling either — removed 2026-07-03 at the operator's request (see Decision #4, superseded).** The Board updates only via mutation-driven revalidation (`revalidatePath` / `revalidateTag` in `app/actions.ts`) plus `force-dynamic` rendering. A device reflects its own mutations and manual reloads; there is no cross-device auto-sync. **This means FSD §13 M-2 ("changes appear on every other operator's device within a few seconds") is UNMET by design** — a deliberate trade-off, not an oversight (see the open note under Decisions).
 
 ## Decisions
 
@@ -173,7 +145,7 @@ Additionally, **not in this change-unit** (implementation calls):
 
 3. **Capacity model, no machine identity.** FSD §6 locks "Capacity, not assignment." Bookings hold an integer `quantity` (1–8); no booking ever references a specific machine. Future enhancement §17.1 (machine labels) is explicitly out of scope. **Why:** matches the FSD's locked rental model and keeps R-AVAIL-2 (peak-commitment fit) trivial to compute.
 
-4. **Polling sync via `router.refresh()` every ~2s.** Rejected: WebSockets (operational overhead for a favor app), SSE (still a long-lived connection per device), Pusher/Ably (third-party config the client must not need). Server actions revalidate the page with `revalidatePath('/')`; a tiny `'use client'` leaf polls `router.refresh()` on a 2-second interval. **Why:** satisfies FSD §13 M-2 ("within a few seconds") with the minimum mechanism, and M-3 (latest-write-wins) falls out of standard server-action ordering against a single SQLite writer.
+4. ~~**Polling sync via `router.refresh()` every ~2s.**~~ **SUPERSEDED / REVERSED 2026-07-03 at the operator's request ("no polling").** Original decision (kept as fossil): Rejected WebSockets (operational overhead for a favor app), SSE (still a long-lived connection per device), Pusher/Ably (third-party config the client must not need); server actions revalidate the page with `revalidatePath('/')` and a tiny `'use client'` leaf (`_containers/BoardSyncContainer/BoardSyncContainer.tsx`) polled `router.refresh()` on a 2-second interval; rationale was that this satisfied FSD §13 M-2 ("within a few seconds") with the minimum mechanism, and M-3 (latest-write-wins) fell out of standard server-action ordering against a single SQLite writer. **What changed:** the operator explicitly asked to remove polling. `BoardSyncContainer` and its directory were deleted; `BoardView.tsx` no longer imports or mounts it. The Board now updates **only** via mutation-driven revalidation (`revalidatePath` / `revalidateTag` in `app/actions.ts`) over a `force-dynamic` page — a device reflects its own mutations and manual reloads, but there is no cross-device auto-sync. This deliberately reverses the M-2 sync intent this decision established (referenced elsewhere as SPEC Decision #4 / FSD §13 M-2 / DEC-TF3). See the open note below.
 
 5. **Module layout: `modules/bookings/` (business) + `app/` (UI).** Follows `project-structure.md` §1–§2: business domain modules live under `modules/`, never `packages/`. The booth board is application-specific, not a propagated core capability. **Why:** keeps the DDD layer cake (`domain/` / `application/` / `infrastructure/` / `schema/`) inside one business module, and lets `app/page.tsx` stay a thin server-side composition.
 
@@ -197,11 +169,15 @@ Additionally, **not in this change-unit** (implementation calls):
 
 12. **DEC-F — Availability verdict's "free count" is computed at the requested slot, not at "now".** The `fits: true` arm of `AvailabilityVerdict` exposes `freeAtSlot: number` (renamed from `freeNow`), computed as `FLEET_SIZE - peakCommitment(allBookings, startTime, endTime, now)` — the peak commitment by other bookings across the requested window. The label "Stane — N slobodnih" now reports how many scooters are free **during the requested slot**, matching what the fit check actually evaluates. **Why:** the prior implementation returned `computeFreeNow(allBookings, now)` — scooters free at the present moment — which is a different question than "does this fit?". When 3 'booked' reservations start in the future, they don't contribute to `commitmentAt(now)`, so the label reported too many free scooters relative to the requested window. The fit check itself was always correct (it has always used `peakCommitment` over the requested window); only the displayed count was inconsistent with the verdict's true semantics. The fix aligns the displayed count with the question the verdict answers. **Scope is narrow:** the `BoardSnapshot.freeNow` field on the board header is untouched — that field correctly means "free right now" and is rendered above the form. Only the form/edit verdict semantics + the field name change. Tagged against `architecture.md §10` (code is communication — names must mean what they say) and `architecture.md §14` (debuggability — the field name and the math now agree, eliminating a class of "the label lies" confusion).
 
+<!-- 2026-07-03 — polling removal. Open note below records the M-2 trade-off so no future reader mistakes it for an oversight. -->
+
+> **OPEN NOTE (2026-07-03) — M-2 multi-device sync is UNMET by design.** The original FSD §13 M-2 requirement — "keep every operator's device in sync within ~2s" — is **no longer implemented**. Decision #4 (2s `router.refresh()` polling via `BoardSyncContainer`) established it; that decision was reversed on 2026-07-03 at the operator's explicit request ("no polling"). Current behavior: the Board updates only via mutation-driven revalidation (`revalidatePath` / `revalidateTag`) over a `force-dynamic` page, so a device reflects **its own** mutations and manual reloads — a second operator's device does **not** auto-refresh until it is manually reloaded or performs its own mutation. This is a **deliberate trade-off**, not a bug. If cross-device sync is ever required again, it must be re-added through a new decision (polling was the prior mechanism; SSE / WebSocket / Pusher were the rejected alternatives in the original Decision #4). AC (the first FSD §16 checkbox — "All operators' devices reflect any change to the Board within a few seconds") is correspondingly NOT satisfied by the current build; see the annotation on that criterion below.
+
 ## Acceptance Criteria
 
 <!-- Verbatim from FSD §16. These are documentation of intent; the auditor does not run them. -->
 
-- [ ] All operators' devices reflect any change to the Board within a few seconds.
+- [ ] All operators' devices reflect any change to the Board within a few seconds. **← UNMET BY DESIGN as of 2026-07-03 (polling removed at operator request; see Decision #4 superseded + the open note above). A device reflects only its own mutations + manual reloads; there is no cross-device auto-sync.**
 - [ ] Given 4 skis 12:00–13:00 and 2 skis 12:30–13:15, a request for 3 skis 12:45–13:30 is reported as not fitting, with next opening 13:00 (worked example A).
 - [ ] A rental ending exactly at a time T does not block a rental starting at T (worked example B).
 - [ ] A rental due 12:45, still out at 12:51, shows as late and pinned; an upcoming rental depending on it shows at-risk.
@@ -222,7 +198,7 @@ Additionally, **not in this change-unit** (implementation calls):
 
 ### Najavljeno section (Upcoming)
 
-- [ ] **AC-2.1** — When a booking's `startTime < now`, the **Pošalji vani** button on that row is disabled — both visually (muted style) and functionally (`disabled` attribute, no `onClick` fallback). The board's ~2s polling will pick up the transition naturally.
+- [ ] **AC-2.1** — When a booking's `startTime < now`, the **Pošalji vani** button on that row is disabled — both visually (muted style) and functionally (`disabled` attribute, no `onClick` fallback). ~~The board's ~2s polling will pick up the transition naturally.~~ **(2026-07-03: polling removed — the `startTime < now` transition is now reflected on the next `force-dynamic` render, i.e. on the operator's own next mutation or a manual reload, not automatically.)**
 - [ ] **AC-2.2** — Tapping **Uredi** on an upcoming booking expands an inline edit panel directly under the row showing the same fields as Nova rezervacija (quantity 1–8 segmented control, Početak picker per AC-4, Trajanje pills + custom). The live availability verdict re-runs through the SAME `computeAvailability` server action / use case the create flow uses — no duplicated fit logic anywhere. When the proposed edit doesn't fit, the **Spremi promjene** button is visually and functionally disabled (same rule as AC-6.1). The Cancel button collapses the panel without saving.
 
 ### Availability verdict label
@@ -291,7 +267,7 @@ Additionally, **not in this change-unit** (implementation calls):
   - `_components/BookingFormPanel.tsx` — quantity stepper (1–8), start = Now or HH:MM presets, duration 30/45/60/custom, name & notes, live verdict, **Book** and **Book anyway** buttons.
   - `_components/HistoryToggle.tsx` — toggles returned/cancelled rows back into view (FR-3).
   - `_containers/BookingFormContainer.tsx` — small `'use client'` container holding form state + verdict computation request.
-  - `_containers/BoardSyncContainer.tsx` — small `'use client'` leaf that calls `router.refresh()` every ~2s (M-2 polling sync).
+  - ~~`_containers/BoardSyncContainer.tsx` — small `'use client'` leaf that calls `router.refresh()` every ~2s (M-2 polling sync).~~ **REMOVED 2026-07-03 — the operator asked for no polling. This leaf and its directory were deleted; `BoardView.tsx` no longer imports or mounts it. No auto-sync leaf exists; the Board relies on mutation-driven revalidation + `force-dynamic` only. See Decision #4 (superseded).**
   - Tailwind v4 design: high-contrast, large touch targets, sunlight-legible (U-6).
 
 - [ ] **T5 — Architectural review** (owner: auditor)
@@ -500,6 +476,19 @@ The operating fleet has been reduced from **8 scooters to 6**. `FLEET_SIZE` is n
 
 Scope note for this file: the FSD-verbatim numbers preserved above — R-AVAIL-1/R-AVAIL-2 ("capacity 8"), U-2 ("quantity 1–8 increments"), Decision #3 ("integer `quantity` (1–8)"), the Intent's "8-jet-ski rental booth", and the §17 "8 skis" future-enhancement note — are quotations of the original FSD (§9/§10/§12) and past-tense change-log/verdict entries. They are left **as-is** as the original contract and historical fossil; they are not the current fleet-size claim. The current fleet size is 6 (DEC-P10). No code or FSD quote is rewritten here — this is a pointer so no reader mistakes the archived 8-scooter numbers for the live configuration.
 
+### 2026-07-03 — remove 2s board polling (operator request: "no polling")
+
+The 2-second board polling mechanism was removed entirely at the operator's explicit request. This reverses Decision #4 (kept as a superseded fossil) and leaves FSD §13 M-2 ("~2s multi-device sync") **UNMET by design** — recorded as the open note above the Acceptance Criteria and annotated on the first FSD §16 criterion.
+
+- DEL app/_containers/BoardSyncContainer/BoardSyncContainer.tsx (the project's only `useEffect`-based `'use client'` leaf; ran `setInterval(() => router.refresh(), 2000)`) + its now-empty directory.
+- MOD app/_components/BoardView/BoardView.tsx — removed the `BoardSyncContainer` import, the `<BoardSyncContainer />` mount, and the descriptive comments referencing the polling leaf.
+- MOD app/_containers/ShowPastContainer/ShowPastContainer.tsx — rewrote the stale "board polls every 2s" comment to describe the mutation-driven revalidation model actually in force (comment-only edit).
+- app/page.tsx untouched (`force-dynamic` + `revalidate = 0`).
+
+Current behavior of record: the Board updates only via mutation-driven revalidation (`revalidatePath` / `revalidateTag` in `app/actions.ts`) over the `force-dynamic` page. A device reflects its own mutations and manual reloads; there is no cross-device auto-sync. (Auditor verdict for this change-unit: PASS with notes — see the AUTO:CARD / AUTO:VERDICT blocks; the SPEC-drift note it raised is what this entry reconciles.)
+
+SPEC docs reconciled in this pass: Decision #4 marked superseded; Scope "not in this change-unit" polling line corrected; AC-2.1 polling clause struck; Task T4 `BoardSyncContainer` bullet struck; first FSD §16 AC annotated UNMET-by-design; open note added above Acceptance Criteria.
+
 <!-- AUTO:WORKLOG — appended (never overwritten) by the auditor on every run -->
 ## Worklog
 
@@ -512,40 +501,34 @@ Scope note for this file: the FSD-verbatim numbers preserved above — R-AVAIL-1
 2026-06-08T20:30:00Z  auditor  engineering review (six-item operator review round · T6 donnie + T7 nexus + T8 frankie + T5 donnie correction)  WARN  six-item change-unit lands cleanly on the sacred-algorithm axis. DEC-A held: every fit / peakCommitment / nextOpening / commitmentAt / freeNow / effectiveWindow definition is in domain/availability.ts and nowhere else. DEC-B held: zero runtime `bookAnyway` references in app/ + modules/ + lib/ (five doc comments documenting the removal — acceptable). DEC-C held in spirit: `nextQuarterHourBoundaries` is pure with `now` passed in. DEC-D held: `nextOpeningQuantity` is gone from `AvailabilityVerdict`. AC-1..AC-6 all mechanically verified. 1 violation: `BookingError.code` union still carries the dead `'OVER_CAPACITY'` literal next to the new `'CAPACITY_EXCEEDED'` — exactly the §8 architecture / §6.11 donnie pattern that forbids unconsumed orphan symbols after a refactor. 3 concerns: (a) `lib/time.ts` placement deviates from DEC-C and T6 which both prescribed `modules/bookings/domain/` — the relocation rationale ("packages/-wide hook block") is real but the SPEC's actual prescribed path was never tried, and `lib/` extends the previously-flagged Turbopack-shim carryover; (b) `ConfirmButton` rolls its own modal focus management (setTimeout + querySelector) instead of Radix/shadcn Dialog — frankie-rules §5 explicit concern, missing focus trap / restoration / Escape; (c) `formatHHMM` / `parseHHMM` / `resolveStartMs` / `resolveDurationMin` duplicated across BookingFormContainer + BookingEditContainer — same shape as `nextQuarterHourBoundaries` which WAS deduplicated, so the deduplication is asymmetric. 3 notes: `croatian.ts` orphaned from its folder home, SPEC Change Log not updated for T6-T8 work, `Promise.all([single])` minor §9 micro-anticipation in page.tsx. All prior carryover state (frankie §2.2 ternaries, §2.3 segmented controls, JetterLogo single-caller, IBookingRepository.findAll, lib/observability shim) holds unchanged.
 2026-06-09T13:45:00Z  auditor  engineering review (cleanup re-audit · 20:30 remediations)  PASS  every 20:30 finding closed cleanly in one tight pass. (1) HIGH VIOLATION resolved — `'OVER_CAPACITY'` literal removed from `BookingError.code` union; `grep -rn OVER_CAPACITY` across app/ + modules/ + lib/ returns zero hits; only `'CAPACITY_EXCEEDED'` survives (types.ts:170). (2) CONCERN — lib/time.ts placement resolved by DEC-E formalizing the deviation from DEC-C's `modules/bookings/domain/` prescription with full rationale (architecture-guard hook + project-structure §4 import surface + packages/ hook block all documented; supersedes DEC-C helper-placement clause). (3) CONCERN — `ConfirmButton` modal focus management migrated to `@radix-ui/react-dialog` primitive: focus trap, focus restoration, Escape (`onEscapeKeyDown`), click-outside (`onInteractOutside`), and full ARIA wiring all by Radix; `useEffect` + `setTimeout` + `document.querySelector` gone. (4) CONCERN — `formatHHMM` / `parseHHMM` / `resolveStartMs` / `resolveDurationMin` deduplicated to `lib/time.ts` alongside `nextQuarterHourBoundaries`; both containers now import from `@/lib/time`. (5) NOTE — `croatian.ts` relocated `BookingFormPanel/` → `BookingFormFields/` (sole-consumer colocation). (6) NOTE — SPEC Change Log updated with full 2026-06-09 landed-work entry. All sacred invariants (DEC-A through DEC-E) verified by grep. All prior carryover (frankie §2.2 ternaries, §2.3 segmented controls, JetterLogo single-caller, IBookingRepository.findAll, lib/observability shim, page.tsx Promise.all([single])) holds unchanged — explicitly out of scope this pass.
 2026-06-09T14:30:00Z  auditor  engineering review (T10 / DEC-F bugfix · narrow rename + recomputation)  PASS  three-file targeted bugfix lands clean. `AvailabilityVerdict.freeNow` (fits:true arm) → `freeAtSlot`; computation switched from `commitmentAt(now)` to `peakCommitment(allBookings, startTime, endTime, now)` — same domain function `fits()` already uses (DEC-A intact, no math duplicated). Single UI consumer at `BookingFormFields.tsx:338` updated. `BoardSnapshot.freeNow` correctly preserved per DEC-F's narrow-scope clause (different call site, "free right now" semantic is correct there; `getBoardSnapshotUseCase` + `AvailabilityHeader` untouched). Capability sidecar correctly unchanged (input shape unchanged; only output field name + computation source moved). `tsc --noEmit` clean (orchestrator-confirmed) corroborates `grep -rn "verdict.freeNow"` zero-hit verification — the rename surfaced any straggler as a compile error, none existed. Architecture §10 (code is communication) + §14 (debuggability) satisfied: the field name now matches the math; the "label lies" class of bug is closed at root cause. All sacred invariants (DEC-A through DEC-F) verified. All prior carryover holds unchanged — explicitly out of scope this pass.
+2026-07-03T00:00:00Z  auditor  engineering review (remove 2s board polling · deletion + comment cleanup)  PASS with notes  clean removal of the 2-second polling mechanism. `BoardSyncContainer.tsx` (the project's only `useEffect`-based `'use client'` leaf running `setInterval(() => router.refresh(), 2000)`) and its directory deleted; `BoardView.tsx` drops the import, the `<BoardSyncContainer />` mount, and both descriptive comments (inline + ASCII tree line); `ShowPastContainer.tsx` rewrites its stale "board polls every 2s" comment to describe the mutation-driven `revalidateTag`/`revalidatePath` refresh model actually in force (comment-only edit, verified not a call). `grep -rn BoardSyncContainer` across code: zero hits; `grep -rn "router.refresh|setInterval|polls every"` across app/: zero hits — no orphaned references, no dead timer, no stale polling comment survives in code. `BoardView` still consumed at page.tsx:33,90. `app/page.tsx` force-dynamic/revalidate=0 intentionally untouched. Architecture §8 (complete removal, no half-finished work) + §10/§17 (stale comment corrected not abandoned) satisfied; server-first §4 (client JS surface reduced). Two NOTES: (1) SPEC.md:294 still documents BoardSyncContainer as a live polling leaf — stale documentation, dispatch `spec` to reconcile (and confirm whether the FSD §13 / M-2 multi-device-sync intent still stands); (2) BoardView.tsx:117 leftover blank line where the mount was — cosmetic, formatter clears it. No violations, no concerns.
 
 <!-- /AUTO:WORKLOG -->
 
 <!-- AUTO:VERDICT — overwritten by the auditor on every run -->
 ## Verdict
-**PASS** · 2026-06-09T14:30:00Z
+**PASS with notes** · 2026-07-03T00:00:00Z
 
-The T10 / DEC-F bugfix lands as a textbook narrow change-unit: three files, one semantic correction, zero collateral. The operator-reported "label lies" bug (the live verdict's free-count reported skis free **right now** instead of skis free **during the requested window**) is fixed at root cause by repointing the application shell to the same `peakCommitment` function the fit-check itself already uses — closing the class of bug where the verdict's stated answer and its displayed evidence disagreed.
+The removal of the 2-second board polling mechanism lands as a clean, complete deletion. This is exactly the shape architecture.md §8 (no half-finished work) rewards: the `'use client'` leaf, its directory, its import, its JSX mount, and every descriptive comment referencing it are gone in one change-unit — no orphaned references, no dead timer, no stale polling comment survives anywhere in code. The one adjacent comment that would have gone stale (`ShowPastContainer`'s "board polls every 2s") was corrected rather than abandoned, and the rewrite accurately describes the mutation-driven refresh model actually in force.
 
 **What landed:**
 
-- **`modules/bookings/domain/types.ts`** — `AvailabilityVerdict.freeNow` (fits:true arm) renamed to `freeAtSlot`. JSDoc at lines 109-113 explicitly disambiguates the new semantic ("NOT 'free right now'") and cites DEC-F as the rationale fossil. `BoardSnapshot.freeNow` correctly preserved (line 137) — different call site, different semantic, the board header's "free right now" question is correct for that context.
-- **`modules/bookings/application/computeAvailabilityUseCase.ts:111`** — the `fits:true` branch now computes `const freeAtSlot = FLEET_SIZE - peakCommitment(allBookings, input.startTime, endTime, now)` instead of `FLEET_SIZE - commitmentAt(bookings, now, now)`. The math reuses the exact pure-domain function already invoked inside `fits()` at `domain/availability.ts:185` — DEC-A intact, no math duplicated, the shell stays thin. The `freeNow as computeFreeNow` import alias is correctly dropped (no dead imports, no TS6133); `peakCommitment` is imported and consumed. Inline + file-header JSDoc updated to reflect the new semantics.
-- **`app/_components/BookingFormFields/BookingFormFields.tsx:338`** — single text expression swap from `{verdict.freeNow}` to `{verdict.freeAtSlot}`. The wrapping JSX (`role="status"`, `aria-live="polite"`, `bg-success` semantic tokens) is unchanged; zero a11y or design-system regression possible. `BookingFormFields` is the sole consumer — the rename does not strand any other reader.
+- **`app/_containers/BoardSyncContainer/BoardSyncContainer.tsx` (deleted)** — the project's only `useEffect`-based `'use client'` leaf, which ran `setInterval(() => router.refresh(), 2000)`. File and now-empty directory removed. Deleting it strictly reduces shipped client JavaScript (server-first-react §4).
+- **`app/_components/BoardView/BoardView.tsx`** — removed the `BoardSyncContainer` import, the `<BoardSyncContainer />` mount, the inline mount comment, and the ASCII component-tree line referencing the polling leaf. Remains a pure server `_components/` file (props → JSX, no hooks). Still consumed at `app/page.tsx:33,90`.
+- **`app/_containers/ShowPastContainer/ShowPastContainer.tsx`** — comment-only edit. The stale claim "the board polls every 2s via router.refresh()" is replaced by an accurate description: toggle state persists across the server-driven refreshes triggered by mutations (`revalidateTag`/`revalidatePath`). DEC-TF3 rationale retained. Remains a slim `'use client'` state proxy (`useState` only, rendering delegated to `ShowPastView`).
+- **`app/page.tsx`** — intentionally untouched (`force-dynamic` + `revalidate = 0`), consistent with the change-unit scope.
 
-**Sacred invariants verified (DEC-A through DEC-F):**
+**Mechanical verification:**
 
-- DEC-A — `peakCommitment` defined exclusively at `modules/bookings/domain/availability.ts:134`; called from three sites, all in the application shell or the domain layer's own helpers: `domain/availability.ts:185` (inside `fits()`), `domain/availability.ts:328` (inside `atRiskUpcoming`), and `application/computeAvailabilityUseCase.ts:111` (new caller). No UI-layer duplication. The fit-check and the displayed count now agree on the same math over the same window — the whole point of the bugfix.
-- DEC-B — unaffected (no `bookAnyway` touch).
-- DEC-C — unaffected (no quarter-hour helper touch).
-- DEC-D — unaffected (`nextOpeningQuantity` stays gone).
-- DEC-E — unaffected (no `lib/time.ts` touch in this pass).
-- DEC-F (new) — the verdict's "free count" is now computed at the requested slot, not at "now"; the field name agrees with the math. `grep -rn "verdict.freeNow"` zero hits across `app/` + `modules/` + `lib/`; `tsc --noEmit` clean confirms no straggling consumer; `BoardSnapshot.freeNow` and its consumers (`AvailabilityHeader`, `getBoardSnapshotUseCase`) correctly untouched per the explicit narrow-scope clause.
+- `grep -rn "BoardSyncContainer"` across `.ts`/`.tsx`: zero code hits. Only surviving reference is `SPEC.md:294` (documentation).
+- `grep -rn "router.refresh|setInterval|POLL_INTERVAL|polls every|2s polling"` across `app/`: zero hits.
+- `ShowPastContainer.tsx:13` `revalidateTag`/`revalidatePath` mention confirmed comment-only (not a call in a client component); the model it describes is real (`app/actions.ts` performs the calls; `page.tsx` is force-dynamic).
 
-**Engineering mindsets satisfied:**
+**Notes (do not block; PASS-with-notes):**
 
-- architecture §3 (pure core / imperative shell) — the recomputation routes through `peakCommitment`, a pure domain function; the use case shell is one line of dispatch.
-- architecture §8 (no half-finished work) — the rename is complete; `tsc --noEmit` clean; no dead imports; JSDoc updated to match.
-- architecture §10 (code is communication) — `freeAtSlot` names what it is; the prior `freeNow` named the wrong question.
-- architecture §14 (debuggability) — the name and the math agree; the "label lies" class of bug is closed.
-- architecture §16 (high agency) — the bug is fixed at root cause (the computation against the wrong window), not papered over at the UI layer.
+- **SPEC drift** — `SPEC.md:294` still documents `_containers/BoardSyncContainer.tsx` as a live polling leaf (M-2 multi-device sync). Documentation, outside auditor remediation scope, but now stale. Owner: dispatch `spec` to reconcile the SPEC with the removal and confirm whether the FSD §13 / M-2 "~2s multi-device sync" intent still stands now that active polling is gone.
+- **Cosmetic** — `BoardView.tsx:117` has a leftover blank line where the mount was removed. Formatter clears it.
 
-**Carryover (deferred, NOT introduced by this pass — unchanged from the 13:45 audit):** frankie §2.2 ternary class strings; frankie §2.3 hand-rolled segmented controls (Radix `ToggleGroup` upgrade deferred); architecture §9 JetterLogo single-caller; `IBookingRepository.findAll` zero-caller surface; `lib/observability.ts` Turbopack shim; `app/page.tsx` Promise.all([single]) micro-anticipation.
-
-**Recommendation:** PASS — the bugfix is ready to commit. Three files, one semantic correction, every applicable rule clean. The Mario gate is the green light, not the auditor.
+**Recommendation:** PASS with notes — the deletion is complete and correct; nothing that depended on the removed container was left dangling. Ready to commit once the SPEC-drift note is handled (dispatch `spec`). The Mario gate is the green light, not the auditor.
 
 <!-- /AUTO:VERDICT -->

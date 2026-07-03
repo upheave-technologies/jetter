@@ -4,7 +4,6 @@ import { DayNav } from '@/app/_components/DayNav/DayNav';
 import { DensityChart } from '@/app/_components/DensityChart/DensityChart';
 import { BookingsList } from '@/app/_components/BookingsList/BookingsList';
 import { UtilizationPanel } from '@/app/_components/UtilizationPanel/UtilizationPanel';
-import { BoardSyncContainer } from '@/app/_containers/BoardSyncContainer/BoardSyncContainer';
 import { BoardTabsContainer } from '@/app/_containers/BoardTabsContainer/BoardTabsContainer';
 import { BookingFormContainer } from '@/app/_containers/BookingFormContainer/BookingFormContainer';
 import { MaintenanceFormContainer } from '@/app/_containers/MaintenanceFormContainer/MaintenanceFormContainer';
@@ -43,7 +42,6 @@ type BoardViewProps = {
  *   │  ├ Panel A: Raspored        │   ← form, list, maintenance, reconciliation
  *   │  └ Panel B: Gustoća         │   ← density chart + utilization
  *   └─────────────────────────────┘
- *   BoardSyncContainer (invisible) ← 2s polling for multi-device sync (M-2)
  *
  * Server component — orchestrates the layout, mounts client leaves at the
  * minimum client surface (server-first-react.md §4).
@@ -117,8 +115,6 @@ export function BoardView({
       {/* Two-tab content: Raspored + Gustoća */}
       <BoardTabsContainer rasporedTab={rasporedPanel} gustocaTab={gustocaPanel} />
 
-      {/* Invisible 2s polling leaf — keeps all operator devices in sync (M-2) */}
-      <BoardSyncContainer />
     </div>
   );
 }
